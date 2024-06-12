@@ -1,0 +1,6 @@
+# ignore big posterior files & plots
+*.hdf5
+plots/*
+
+# ignore the script to grab Bowler+ 2020 posteriors
+get_files.py
