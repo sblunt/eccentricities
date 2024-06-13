@@ -113,7 +113,7 @@ plt.ylabel("M$\sin{i}$ [M$_{\\mathrm{{Jup}}}$]")
 plt.tight_layout()
 ax_cbar = plt.colorbar()
 ax_cbar.set_label("completeness")
-plt.savefig("plots/sma_msini.png", dpi=250)
+plt.savefig("plots/completeness_sma_msini.png", dpi=250)
 
 plt.figure()
 plt.imshow(completeness_ecc_sma.T)
@@ -132,7 +132,7 @@ plt.xlabel("ecc")
 plt.tight_layout()
 ax_cbar = plt.colorbar()
 ax_cbar.set_label("completeness")
-plt.savefig("plots/ecc_sma.png", dpi=250)
+plt.savefig("plots/completeness_ecc_sma.png", dpi=250)
 
 plt.figure()
 plt.imshow(completeness_ecc_msini.T)
@@ -154,7 +154,7 @@ plt.ylabel("M$\sin{i}$ [M$_{\\mathrm{{Jup}}}$]")
 plt.tight_layout()
 ax_cbar = plt.colorbar()
 ax_cbar.set_label("completeness")
-plt.savefig("plots/ecc_msini.png", dpi=250)
+plt.savefig("plots/completeness_ecc_msini.png", dpi=250)
 
 plt.figure()
 plt.imshow(injections_ecc_sma.T)
@@ -174,3 +174,8 @@ plt.tight_layout()
 ax_cbar = plt.colorbar()
 ax_cbar.set_label("injections")
 plt.savefig("plots/ecc_sma_injections.png", dpi=250)
+
+# plot completeness as a function of eccentricity for planets in Brendan's sample
+
+# mask
+completeness

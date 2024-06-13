@@ -1,3 +1,4 @@
-Goals for tomorrow:
-- make plot of occurrence-corrected RV eccentricity histogram
-- get epop running for occurrence-corrected RV eccentricities
+Next goals:
+
+- decide about re-running all relevant legacy fits with uniform priors
+- run epop_sim for the 15 planets

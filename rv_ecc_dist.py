@@ -51,6 +51,7 @@ plt.ylabel("N. planets")
 plt.xlabel("median eccentricity")
 plt.savefig("plots/legacy_ecc_histogram.png", dpi=250)
 
-
 print("Number of BDs in Legacy sample: {}".format(len(legacy_bds)))
 print("Number of planets in Legacy sample: {}".format(len(legacy_planets)))
+
+print("Legacy planet host names: {}".format(legacy_planets.hostname))
