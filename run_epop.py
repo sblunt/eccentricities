@@ -56,7 +56,7 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
 
 ecc_posteriors = []
 n_samples = int(
-    1e3
+    1e5
 )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 for post_path in glob.glob("lee_posteriors/*.csv"):
     ecc_post = pd.read_csv(post_path)
@@ -71,38 +71,40 @@ sorted_by_med_idxs = np.flip(
 )
 
 # tower plot
-print("Making tower plot!")
-fig, ax = plt.subplots(15, 1, figsize=(4, 11), sharex=True)
-plt.subplots_adjust(hspace=0)
+make_tower_plot = False
+if make_tower_plot:
+    print("Making tower plot!")
+    fig, ax = plt.subplots(15, 1, figsize=(4, 11), sharex=True)
+    plt.subplots_adjust(hspace=0)
 
-nbins = 50
-for i in np.arange(n_posteriors):
-    ax[i].hist(
-        ecc_posteriors[sorted_by_med_idxs[i]],
-        bins=nbins,
-        color="rebeccapurple",
-        histtype="step",
-        alpha=0.5,
-        density=True,
-    )
-    ax[i].set_yticks([])
-    # # overplot the sqrt(e) prior
-    # emin = 1 / nbins
-    # x2plot = np.linspace(emin, 1, nbins)
-    # A = 1 / (2 * (1 - np.sqrt(emin)))  # normalization constant
-    # ax[i].plot(x2plot, A / np.sqrt(x2plot), color="rebeccapurple")
-plt.xlabel("eccentricity")
-plt.savefig("plots/rv_tower_plot.png", dpi=250)
+    nbins = 50
+    for i in np.arange(n_posteriors):
+        ax[i].hist(
+            ecc_posteriors[sorted_by_med_idxs[i]],
+            bins=nbins,
+            color="rebeccapurple",
+            histtype="step",
+            alpha=0.5,
+            density=True,
+        )
+        ax[i].set_yticks([])
+        # # overplot the sqrt(e) prior
+        # emin = 1 / nbins
+        # x2plot = np.linspace(emin, 1, nbins)
+        # A = 1 / (2 * (1 - np.sqrt(emin)))  # normalization constant
+        # ax[i].plot(x2plot, A / np.sqrt(x2plot), color="rebeccapurple")
+    plt.xlabel("eccentricity")
+    plt.savefig("plots/rv_tower_plot.png", dpi=250)
 
-h_prior = None
-like = RVPop_Likelihood(posteriors=ecc_posteriors, prior=h_prior)
-print("Running MCMC!")
-nwalkers = 50
-nsteps = 1000
-beta_samples = like.sample(nsteps, burn_steps=500, nwalkers=nwalkers)
+# h_prior = None
+# like = RVPop_Likelihood(posteriors=ecc_posteriors, prior=h_prior)
+# print("Running MCMC!")
+# nwalkers = 50
+# nsteps = 1000
+# beta_samples = like.sample(nsteps, burn_steps=500, nwalkers=nwalkers)
 
-np.savetxt(
-    "plots/{}Prior/epop_samples_{}prior.csv".format(h_prior, h_prior),
-    beta_samples,
-    delimiter=",",
-)
+# np.savetxt(
+#     "plots/{}Prior/epop_samples_{}prior.csv".format(h_prior, h_prior),
+#     beta_samples,
+#     delimiter=",",
+# )
