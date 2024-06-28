@@ -11,7 +11,7 @@ import pandas as pd
 from astropy import units as u, constants as cst
 import matplotlib.pyplot as plt
 
-n_ecc_bins = 10
+n_ecc_bins = 20
 
 ecc = np.linspace(0, 1, n_ecc_bins)
 
@@ -52,10 +52,27 @@ for f in inj_rec_files:
                 injections[int(row.ecc_completeness_bins)] += 1
                 recoveries[int(row.ecc_completeness_bins)] += 1
 
+# compute uncertainty on completeness (using Poisson statistics from # of injections)
 completeness = recoveries / injections
+uncertainty = 1 / np.sqrt(injections)
 
 plt.figure()
 plt.plot(ecc, completeness, color="rebeccapurple")
+plt.fill_between(
+    ecc,
+    completeness + uncertainty,
+    completeness - uncertainty,
+    color="rebeccapurple",
+    alpha=0.2,
+)
+
+# overplot a linear fit
+(
+    m,
+    b,
+) = np.polyfit(ecc, completeness, 1, w=1 / uncertainty)
+plt.plot(ecc, m * ecc + b, color="k", ls="--", label="m={:.3f}, b={:.3f}".format(m, b))
+plt.legend()
 plt.title("RV planets in same range as Brendan planets")
 plt.xlabel("eccentricity")
 plt.ylabel("RV completeness")

@@ -1,5 +1,6 @@
 # ignore big posterior files & plots
-*.hdf5
+lee_posteriors/*
+brendan_posteriors/*
 plots/*
 
 # ignore the script to grab Bowler+ 2020 posteriors

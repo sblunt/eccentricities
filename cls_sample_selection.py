@@ -1,16 +1,11 @@
-# goal of this file: given
-# 1) the ecc posteriors of all RV planets in CLS sample, and
-# 2) the completeness contours from completeness.py:
-# do the following:
-# 1) calculate the pop-level eccentricity distribution for the RV planets in a sma/msini range that overlaps with the imaged planets
-# 2) compare the overall pop-level eccentricity distribution for all RV CLS planets to other publications (as a sanity check)
+"""
+Select RV sample that overlaps with Brendan's cuts in sma/mass
+"""
 
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# read in the eccentricity posteriors of all RV planets in CLS sample
-# note: the chains themselves are not public (as far as I could see), so I
-# reconstructed posteriors based on the med/lo/hi statistics
+# select a subset from the CLS confirmed planets sample that overlap with Brendan's cuts
 
 legacy_planets = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
@@ -55,3 +50,21 @@ print("Number of BDs in Legacy sample: {}".format(len(legacy_bds)))
 print("Number of planets in Legacy sample: {}".format(len(legacy_planets)))
 
 print("Legacy planet host names: {}".format(legacy_planets.hostname))
+
+"""
+120066 pl 1
+145675 pl 2
+156279 pl 2
+181234 pl 1
+213472 pl 1
+217014 pl 2
+217107 pl 2
+26161 pl 1
+28185 pl 2
+4203 pl 2
+50499 pl 2
+66428 pl 2
+75732 pl 3
+92788 pl 2
+183263 pl 2
+"""

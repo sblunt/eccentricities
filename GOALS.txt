@@ -1,4 +1,0 @@
-Next goals:
-
-- decide about re-running all relevant legacy fits with uniform priors
-- run epop_sim for the 15 planets
