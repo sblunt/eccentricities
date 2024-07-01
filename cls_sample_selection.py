@@ -40,7 +40,6 @@ plt.savefig("plots/legacy_sample.png", dpi=250)
 
 plt.figure()
 plt.hist(legacy_planets.e_med.values, bins=7, label="Legacy RV planets")
-# TODO: overplot imaged planets
 plt.legend()
 plt.ylabel("N. planets")
 plt.xlabel("median eccentricity")
