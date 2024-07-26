@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 # TODO: correct for mass completeness
 # TODO: take msini/projected separation into account in sample selection
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
+# TODO: interpretation: could it be an age effect or a stellar mass effect?
 
 
 class RVPop_Likelihood(hier_sim.Pop_Likelihood):
