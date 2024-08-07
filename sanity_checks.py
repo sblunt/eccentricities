@@ -5,8 +5,6 @@ import corner
 """
 Draws values that are uniform in sqrt(e)sin(w)/sqrt(e)cos(w), converts them to e, 
 then plots the result to show that it's uniform in e.
-
-TODO: undo my sqrt(e) division in the HBM model
 """
 
 n_samples = int(1e6)
@@ -35,4 +33,16 @@ fig.axes[3].hist(
     bins=bins,
 )
 
-plt.savefig("plots/sqrt_e_samples.png", dpi=250)
+plt.savefig("plots/sanity_checks/sqrt_e_samples.png", dpi=250)
+
+"""
+Converts known msini to mass, accounting for unknown inclination
+"""
+
+Msini = 5
+inc = np.arccos(np.random.uniform(-1, 1, int(1e5)))
+M = Msini / np.sin(inc)
+
+plt.figure()
+plt.hist(M, bins=50, range=(0, 10))
+plt.savefig("plots/sanity_checks/m_vs_msini.png", dpi=250)
