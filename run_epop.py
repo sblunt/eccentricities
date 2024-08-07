@@ -6,7 +6,7 @@ import glob
 import matplotlib.pyplot as plt
 
 # TODO: correct for mass completeness
-# TODO: take msini/projected separation into account in sample selection
+# TODO: make arguments about msini/projected separation into account in sample selection
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
 # TODO: interpretation: could it be an age effect or a stellar mass effect?
 
@@ -29,10 +29,8 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
 
     def calc_likelihood(self, beta_params):
         """
-        This method overwrites ePop!'s default. It makes two main changes wrt the default in ePop!
-        1. It assumes that the individual object posteriors were computed with a e^(-1/2) prior applied,
-            so it divides this out here to "undo" this.
-        2. It corrects for non-uniform completeness, assuming a linear fit to the
+        This method overwrites ePop!'s default. It makes one change wrt the default in ePop!
+        It corrects for non-uniform completeness, assuming a linear fit to the
             RV eccentricity completeness with m=-.247, b=0.296
         """
         a, b = beta_params
@@ -42,11 +40,7 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
 
         system_sums = np.array(
             [
-                np.sum(
-                    beta.pdf(ecc_post, a, b)
-                    / self.completeness(ecc_post)
-                    / ecc_post ** (-0.5)
-                )
+                np.sum(beta.pdf(ecc_post, a, b) / self.completeness(ecc_post))
                 / np.shape(ecc_post)[0]
                 for ecc_post in self.ecc_posteriors
             ]

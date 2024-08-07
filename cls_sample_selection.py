@@ -10,7 +10,13 @@ import matplotlib.pyplot as plt
 legacy_planets = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
 )
-# TODO: pretty sure this is selecting by the mode of the distribution, but check that
+
+# remove false positives
+legacy_planets = legacy_planets[
+    (legacy_planets.status == "K")
+    | (legacy_planets.status == "S")
+    | (legacy_planets.status == "C")
+]
 
 # select a subset that overlap in mass and sma with the imaged objects in Brendan's sample
 # Brendan's cuts: M between 2 and 75 Mjup, (projected!) seps 5-100 au. We are going by
@@ -19,23 +25,30 @@ legacy_planets_inseprange = legacy_planets[
     (legacy_planets.axis > 5) & (legacy_planets.axis < 100)
 ]
 
-# TODO: check if this is mass or msini (I'm assuming mass)
+# this is making a selection by the median model msini = most probable mass
 legacy_bds = legacy_planets_inseprange[
-    (legacy_planets.mass > 15) & (legacy_planets.mass < 75)
+    (legacy_planets.mass_med > 15) & (legacy_planets.mass_med < 75)
 ]
+
+# TODO: make a stronger statistical argument that the samples overlap in mass
+# TODO: make a statistical argument that the samples overlap in sep/projected sep
+
 legacy_planets = legacy_planets_inseprange[
-    (legacy_planets.mass > 2) & (legacy_planets.mass < 15)
+    (legacy_planets.mass_med > 2) & (legacy_planets.mass_med < 15)
 ]
 
 plt.figure()
-plt.scatter(legacy_bds.axis.values, legacy_bds.mass.values, color="purple")
+plt.scatter(legacy_bds.axis.values, legacy_bds.mass_med.values, color="purple")
 plt.scatter(
-    legacy_planets.axis.values, legacy_planets.mass.values, color="white", ec="purple"
+    legacy_planets.axis.values,
+    legacy_planets.mass_med.values,
+    color="white",
+    ec="purple",
 )
 plt.xscale("log")
 plt.yscale("log")
 plt.xlabel("semimajor axis [au]")
-plt.ylabel("mass [M$_{{\\mathrm{{jup}}}}$]")
+plt.ylabel("Msini [M$_{{\\mathrm{{jup}}}}$]")
 plt.savefig("plots/legacy_sample.png", dpi=250)
 
 plt.figure()
