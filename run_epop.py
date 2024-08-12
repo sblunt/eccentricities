@@ -3,12 +3,10 @@ import numpy as np
 from scipy.stats import beta
 import pandas as pd
 import glob
+import os
 import matplotlib.pyplot as plt
 
-# TODO: correct for K/per completeness
-# TODO: compute completeness stuff in init to speed up code
-# TODO: I should use individual completeness corrections rather than the average completeness
-# TODO: make arguments about msini/projected separation into account in sample selection
+# TODO: take arguments about msini/projected separation into account in sample selection
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
 # TODO: interpretation: could it be an age effect or a stellar mass effect?
 
@@ -24,6 +22,7 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         beta_max=100,
         mu=0.69,
         std=1.0,
+        oneD_completeness=False,
     ):
         super().__init__(
             fnames=fnames,
@@ -34,41 +33,36 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
             std=std,
         )
 
-        self.K_posteriors = K_posteriors
-        self.per_posteriors = per_posteriors
+        completeness_ebins = np.load("e_bins.npy")
+        completeness_Kbins = np.load("K_bins.npy")
+        completeness_perbins = np.load("per_bins.npy")
+        completeness_map = np.load("completeness.npy")
 
-        self.completeness_ebins = np.load("e_bins.npy")
-        self.completeness_Kbins = np.load("K_bins.npy")
-        self.completeness_perbins = np.load("per_bins.npy")
-        self.completeness = np.load("completeness.npy")
+        self.completeness = {}
+        for i, e_array in enumerate(self.ecc_posteriors):
+
+            closest_e_indices = np.argmin(
+                np.abs(e_array[:, None] - completeness_ebins), axis=1
+            )
+            K_array = K_posteriors[i]
+            closest_K_indices = np.argmin(
+                np.abs(K_array[:, None] - completeness_Kbins), axis=1
+            )
+            per_array = per_posteriors[i]
+            closest_per_indices = np.argmin(
+                np.abs(per_array[:, None] - completeness_perbins), axis=1
+            )
+
+            self.completeness[i] = completeness_map[
+                closest_e_indices, closest_per_indices, closest_K_indices
+            ]
+        self.apply_oneD_completeness = oneD_completeness
 
     def oneD_completeness(self, e_array, m=-0.247, b=0.296):
         """
         Returns the fraction of systems that are observable for a given eccentricity array
         """
         return m * e_array + b
-
-    def threeD_completeness(self, e_array, K_array, per_array):
-        """
-        Returns the fraction of systems that are observable for a given eccentricity array
-        """
-        n_samples = len(e_array)
-        completeness = np.zeros(n_samples)
-        closest_e_indices = np.argmin(
-            np.abs(e_array[:, None] - self.completeness_ebins), axis=1
-        )
-        closest_K_indices = np.argmin(
-            np.abs(K_array[:, None] - self.completeness_Kbins), axis=1
-        )
-        closest_per_indices = np.argmin(
-            np.abs(per_array[:, None] - self.completeness_perbins), axis=1
-        )
-
-        completeness = self.completeness[
-            closest_e_indices, closest_per_indices, closest_K_indices
-        ]
-
-        return completeness
 
     def calc_likelihood(self, beta_params):
         """
@@ -80,18 +74,22 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         if a < 0.01 or b < 0.01 or a >= self.beta_max or b >= self.beta_max:
             return -np.inf
 
-        system_sums = np.array(
-            [
-                np.sum(
-                    beta.pdf(ecc_post, a, b)
-                    / self.threeD_completeness(ecc_post, K_post, per_post)
-                )
-                / np.shape(ecc_post)[0]
-                for ecc_post, K_post, per_post in zip(
-                    self.ecc_posteriors, self.K_posteriors, self.per_posteriors
-                )
-            ]
-        )
+        if self.apply_oneD_completeness:
+            system_sums = np.array(
+                [
+                    np.sum(beta.pdf(ecc_post, a, b) / self.oneD_completeness(ecc_post))
+                    / np.shape(ecc_post)[0]
+                    for ecc_post in self.ecc_posteriors
+                ]
+            )
+        else:
+            system_sums = np.array(
+                [
+                    np.sum(beta.pdf(ecc_post, a, b) / self.completeness[i])
+                    / np.shape(ecc_post)[0]
+                    for i, ecc_post in enumerate(self.ecc_posteriors)
+                ]
+            )
 
         log_likelihood = np.sum(np.log(system_sums))
 
@@ -104,7 +102,7 @@ ecc_posteriors = []
 K_posteriors = []
 per_posteriors = []
 n_samples = int(
-    1e5
+    1e3
 )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 for post_path in glob.glob("lee_posteriors/ecc_*.csv"):
     ecc_post = pd.read_csv(post_path)
@@ -181,21 +179,29 @@ if make_tower_plot:
     ax[-1, 1].set_xlabel("K [m/s]")
     plt.savefig("plots/rv_tower_plot.png", dpi=250)
 
-h_prior = None
+h_prior = "gaussian"
+oneD_completeness = True
 like = RVPop_Likelihood(
     ecc_posteriors=ecc_posteriors,
     K_posteriors=K_posteriors,
     per_posteriors=per_posteriors,
     prior=h_prior,
+    oneD_completeness=oneD_completeness,
 )
 print("Running MCMC!")
-burn_steps = 10  # 500
+burn_steps = 500
 nwalkers = 50
-nsteps = 100  # 1000
+nsteps = 200
 beta_samples = like.sample(nsteps, burn_steps=burn_steps, nwalkers=nwalkers)
 
+savedir = f"plots/{h_prior}Prior"
+if oneD_completeness:
+    savedir += "_1Dcompleteness"
+if not os.path.exists(savedir):
+    os.mkdir(savedir)
+
 np.savetxt(
-    "plots/{}Prior/epop_samples_{}prior.csv".format(h_prior, h_prior),
+    "{}/epop_samples.csv".format(savedir),
     beta_samples,
     delimiter=",",
 )

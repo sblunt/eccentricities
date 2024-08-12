@@ -8,11 +8,14 @@ import matplotlib.pyplot as plt
 import corner
 
 # read in MCMC samples
-hprior = "None"
+hprior = "gaussian"
+oneDcompleteness = False
 
-beta_post = np.loadtxt(
-    "plots/{}Prior/epop_samples_{}prior.csv".format(hprior, hprior), delimiter=","
-)
+savedir = f"plots/{hprior}Prior"
+if oneDcompleteness:
+    savedir += "_1Dcompleteness"
+
+beta_post = np.loadtxt(f"{savedir}/epop_samples.csv", delimiter=",")
 
 """
 trend plot
@@ -25,7 +28,7 @@ chains = beta_post.reshape((-1, nwalkers, 2))
 for i in np.arange(nwalkers):
     ax[0].plot(chains[:, i, 0], alpha=0.05, color="k")
     ax[1].plot(chains[:, i, 1], alpha=0.05, color="k")
-plt.savefig("plots/{}Prior/trend.png".format(hprior), dpi=250)
+plt.savefig(f"{savedir}/trend.png", dpi=250)
 
 """
 Eccentricity samples plot
@@ -50,11 +53,11 @@ plt.plot(
 )
 plt.xlabel("eccentricity")
 plt.ylabel("probability density")
-plt.savefig("plots/{}Prior/ecc_samples.png".format(hprior), dpi=250)
+plt.savefig(f"{savedir}/ecc_samples.png", dpi=250)
 
 
 """
 Corner plot
 """
 corner.corner(beta_post, labels=["a", "b"], show_titles=True)
-plt.savefig("plots/{}Prior/corner.png".format(hprior), dpi=250)
+plt.savefig(f"{savedir}/corner.png", dpi=250)

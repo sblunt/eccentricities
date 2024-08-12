@@ -9,7 +9,11 @@ so we could think about incorporating/checking whether "recovered" means "recove
 correctly." However, visually the countours look pretty smooth, so I'm not super
 worried about this.
 
-TODO: plot completeness contours for Tp/w as well 
+K values of pls in sample: 37, 46, 121, 170, 14, 52, 196, 295, 25, 26, 130, 35, 28, 85
+-> range = 10-300
+
+P values of pls in sample: 4e4, 2.5e4, 4.7e3, 7e3, 9.5e4, 5e3, 2e4, 2e4, 7e3, 1e4, 3e4, 4e3, 8e3, 5e3
+-> range = 1e3 - 2e5
 """
 
 import numpy as np
@@ -22,8 +26,8 @@ n_per_bins = 3
 n_k_bins = 3
 
 ecc = np.linspace(0, 1, n_ecc_bins, endpoint=False)
-per = np.linspace(0, 1e5, n_per_bins, endpoint=False)
-K = np.linspace(0, 1000, n_k_bins, endpoint=False)
+per = np.linspace(1e3, 2e5, n_per_bins, endpoint=False)
+K = np.linspace(10, 300, n_k_bins, endpoint=False)
 
 d_ecc = ecc[1:] - ecc[:-1]
 d_K = K[1:] - K[:-1]
@@ -48,7 +52,7 @@ for f in inj_rec_files:
     # account for edge of range
     df["ecc_completeness_bins"][(df.inj_e.values >= ecc[i + 1])] = i + 1
 
-    for i in np.arange(len(ecc) - 1):
+    for i in np.arange(len(per) - 1):
         df["per_completeness_bins"][
             (
                 (df.inj_period.values >= per[i])
@@ -58,7 +62,7 @@ for f in inj_rec_files:
     # account for edge of range
     df["per_completeness_bins"][(df.inj_period.values >= per[i + 1])] = i + 1
 
-    for i in np.arange(len(ecc) - 1):
+    for i in np.arange(len(K) - 1):
         df["K_completeness_bins"][
             ((df.inj_k.values >= K[i]) & (df.inj_k.values < K[i] + d_K[i]))
         ] = i
