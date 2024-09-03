@@ -185,6 +185,9 @@ for i in np.arange(n_k_bins):
             ]
         )
         model_completeness_K_per[i, j] = reg.predict(X_pred.reshape((1, n_features)))
+        import pdb
+
+        pdb.set_trace()
 
 fig, ax = plt.subplots(2, 1)
 ax[0].imshow(model_completeness_K_per.T, origin="lower")

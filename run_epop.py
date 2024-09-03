@@ -6,7 +6,6 @@ import glob
 import os
 import matplotlib.pyplot as plt
 
-# TODO: fit 3d line to completeness
 # TODO: take arguments about msini/projected separation into account in sample selection
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
 # TODO: interpretation: could it be an age effect or a stellar mass effect?
@@ -35,29 +34,9 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
             std=std,
         )
 
-        completeness_ebins = np.load("e_bins.npy")
-        completeness_Kbins = np.load("K_bins.npy")
-        completeness_perbins = np.load("per_bins.npy")
-        completeness_map = np.load("completeness.npy")
+        self.K_posteriors = K_posteriors
+        self.per_posteriors = per_posteriors
 
-        self.completeness = {}
-        for i, e_array in enumerate(self.ecc_posteriors):
-
-            closest_e_indices = np.argmin(
-                np.abs(e_array[:, None] - completeness_ebins), axis=1
-            )
-            K_array = K_posteriors[i]
-            closest_K_indices = np.argmin(
-                np.abs(K_array[:, None] - completeness_Kbins), axis=1
-            )
-            per_array = per_posteriors[i]
-            closest_per_indices = np.argmin(
-                np.abs(per_array[:, None] - completeness_perbins), axis=1
-            )
-
-            self.completeness[i] = completeness_map[
-                closest_e_indices, closest_per_indices, closest_K_indices
-            ]
         self.apply_oneD_completeness = oneD_completeness
 
     def oneD_completeness(self, e_array, m=-0.247, b=0.296):
@@ -65,6 +44,45 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         Returns the fraction of systems that are observable for a given eccentricity array
         """
         return m * e_array + b
+
+    def threeD_completeness(
+        self,
+        e_array,
+        k_array,
+        per_array,
+        coefs=[
+            -2.53632913e00,
+            5.59228559e-04,
+            -1.76563921e-01,
+            2.35817647e-01,
+            1.84698929e-01,
+            -2.19930578e-05,
+        ],
+        intercept=2.184835489386459,
+    ):
+        """
+        Returns the fraction of systems that are observable for a given ecc/k/per array,
+        accounting for covariances between the three. Completeness is treated as
+        a linear combination of features defined from the three input arrays.
+        The fit is performed in completeness_3D.py, and the fitted values are
+        used as the default inputs here.
+        """
+        completeness = (
+            coefs[0] * e_array
+            + coefs[1] * k_array
+            + coefs[2] * np.log(per_array)
+            + coefs[3] * e_array**2
+            + coefs[4] * e_array * np.log(per_array)
+            + coefs[5] * k_array * np.log(per_array)
+        ) + intercept
+
+        # mask nonphysical values
+        # completeness[(completeness < 0) | (completeness > 1)] = 0.0
+        import pdb
+
+        pdb.set_trace()
+
+        return completeness
 
     def calc_likelihood(self, beta_params):
         """
@@ -87,11 +105,19 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         else:
             system_sums = np.array(
                 [
-                    np.sum(beta.pdf(ecc_post, a, b) / self.completeness[i])
+                    np.sum(  # if a posterior sample has a completeness of ~0, we need to treat that differently than just a low completeness
+                        beta.pdf(ecc_post, a, b)
+                        / self.threeD_completeness(ecc_post, k_post, per_post)
+                    )
                     / np.shape(ecc_post)[0]
-                    for i, ecc_post in enumerate(self.ecc_posteriors)
+                    for ecc_post, k_post, per_post in zip(
+                        self.ecc_posteriors, self.K_posteriors, self.per_posteriors
+                    )
                 ]
             )
+        import pdb
+
+        pdb.set_trace()
 
         log_likelihood = np.sum(np.log(system_sums))
 
@@ -182,7 +208,7 @@ if make_tower_plot:
     plt.savefig("plots/rv_tower_plot.png", dpi=250)
 
 h_prior = "gaussian"
-oneD_completeness = True
+oneD_completeness = False
 like = RVPop_Likelihood(
     ecc_posteriors=ecc_posteriors,
     K_posteriors=K_posteriors,
