@@ -38,7 +38,8 @@ d_per = per[1:] - per[:-1]
 recoveries = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
 injections = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
 
-inj_rec_files = glob.glob("/home/sblunt/CLSI/completeness/recoveries_all/*.csv")
+clsi_path = "/Users/bluez3303/Documents/GitHub"  # "/home/sblunt"
+inj_rec_files = glob.glob(f"{clsi_path}/CLSI/completeness/recoveries_all/*.csv")
 for f in inj_rec_files:
     df = pd.read_csv(f)
 
@@ -104,7 +105,7 @@ for f in inj_rec_files:
             ] += 1
 completeness = recoveries / injections
 
-n_features = 6
+n_features = 5
 X = np.ones((n_ecc_bins, n_k_bins, n_per_bins, n_features))
 for i in np.arange(n_ecc_bins):
     for j in np.arange(n_k_bins):
@@ -112,9 +113,9 @@ for i in np.arange(n_ecc_bins):
             X[i, j, k, 0] = ecc[i]
             X[i, j, k, 1] = K[j]
             X[i, j, k, 2] = np.log(per[k])
-            X[i, j, k, 3] = ecc[i] ** 2
-            X[i, j, k, 4] = ecc[i] * np.log(per[k])
-            X[i, j, k, 5] = K[j] * np.log(per[k])
+            # X[i, j, k, 3] = ecc[i] ** 2
+            X[i, j, k, 3] = ecc[i] * np.log(per[k])
+            X[i, j, k, 4] = K[j] * np.log(per[k])
             # X[i, j, k, 5] = K[j] * ecc[k]
 
 
@@ -125,9 +126,19 @@ mask = ~np.isnan(completeness1d)
 
 injections1d = injections.flatten()
 
-# linear fit to completeness
+log_completeness = np.log(completeness1d[mask])
+
+sample_weights = 1 / np.sqrt(injections1d[mask])
+
+# don't count points with completeness of 0 toward the fit
+sample_weights[np.isneginf(log_completeness)] = 0
+log_completeness[np.isneginf(log_completeness)] = 0
+
+# linear fit to log(completeness)
 reg = LinearRegression().fit(
-    X[mask], completeness1d[mask], sample_weight=1 / np.sqrt(injections1d[mask])
+    X[mask],
+    log_completeness,
+    sample_weight=sample_weights,
 )
 
 print(reg.coef_)
@@ -178,16 +189,15 @@ for i in np.arange(n_k_bins):
                 0.5,
                 K[i],
                 np.log(per[j]),
-                1 / 3,
+                # 1 / 3,
                 0.5 * np.log(per[j]),
                 # K[i] * np.log(per[j]),
                 K[i] * 0.5,
             ]
         )
-        model_completeness_K_per[i, j] = reg.predict(X_pred.reshape((1, n_features)))
-        import pdb
-
-        pdb.set_trace()
+        model_completeness_K_per[i, j] = np.exp(
+            reg.predict(X_pred.reshape((1, n_features)))
+        )
 
 fig, ax = plt.subplots(2, 1)
 ax[0].imshow(model_completeness_K_per.T, origin="lower")
@@ -228,13 +238,15 @@ for i in np.arange(n_ecc_bins):
                 ecc[i],
                 K[j],
                 C,  # np.log(P1) - np.log(P0),  # 0.5 * (P1**2 - P0**2) / (P1 - P0),
-                ecc[i] ** 2,
+                # ecc[i] ** 2,
                 ecc[i] * C,  # ,(np.log(P1) - np.log(P0)),
                 # K[j] * C,  # (np.log(P1) - np.log(P0)),
                 K[j] * ecc[i],
             ]
         )
-        model_completeness_ecc_K[i, j] = reg.predict(X_pred.reshape((1, n_features)))
+        model_completeness_ecc_K[i, j] = np.exp(
+            reg.predict(X_pred.reshape((1, n_features)))
+        )
 
 fig, ax = plt.subplots(2, 1)
 ax[0].imshow(model_completeness_ecc_K.T)
@@ -270,13 +282,15 @@ for i in np.arange(n_ecc_bins):
                 ecc[i],
                 0.5 * (K1**2 - K0**2) / (K1 - K0),
                 np.log(per[j]),
-                ecc[i] ** 2,
+                # ecc[i] ** 2,
                 ecc[i] * np.log(per[j]),
                 # 0.5 * np.log(per[j]) * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
                 0.5 * ecc[i] * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
             ]
         )
-        model_completeness_ecc_per[i, j] = reg.predict(X_pred.reshape((1, n_features)))
+        model_completeness_ecc_per[i, j] = np.exp(
+            reg.predict(X_pred.reshape((1, n_features)))
+        )
 
 fig, ax = plt.subplots(2, 1)
 ax[0].imshow(model_completeness_ecc_per.T)
