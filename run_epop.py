@@ -6,8 +6,17 @@ import glob
 import os
 import matplotlib.pyplot as plt
 
-# TODO: take arguments about msini/projected separation into account in sample selection
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
+
+# TODO:
+
+# Finalize log(completeness) model -> update per limits to be consistent
+# Finalize sample selection
+# idea: compute in region of parameter space before we would start not resolving trends.
+# Add orbital period on top of legacy_sample plot —> see lee’s paper fig 2.
+# To get around trend issue, choose orbital periods with baselines > 15 yrs? Or maybe 30 yr, reasoning that half an orbit would not be fit as just a trend?
+# 5 - 10 au—> market as eccentricities of “jupiter-saturn sep” giant planets
+
 # TODO: interpretation: could it be an age effect or a stellar mass effect?
 # TODO: interpretation: think about multiplicity of imaged vs RV systems
 
