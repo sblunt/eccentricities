@@ -12,10 +12,11 @@ legacy_planets = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
 )
 legacy_planets_inseprange = legacy_planets[
-    (legacy_planets.axis > 5) & (legacy_planets.axis < 100)
+    (legacy_planets.axis > 1) & (legacy_planets.axis < 100)
 ]
 legacy_planets = legacy_planets_inseprange[
-    (legacy_planets.mass > 2) & (legacy_planets.mass < 15)
+    (legacy_planets.mass > 1)
+    & (legacy_planets.mass < 75)  # 15 = planet lim, 75 = BD lim
 ]
 
 # construct the eccentricity posterior for each
@@ -53,23 +54,34 @@ for pl in legacy_planets.iterrows():
         print(np.median(K_posterior))
         print(np.median(per_posterior))
 
+        if pl[1].mass < 15:
+            if pl[1].axis < 5:
+                savedir = "close_planets"
+            else:
+                savedir = "far_planets"
+        elif pl[1].mass >= 15:
+            if pl[1].axis < 5:
+                savedir = "close_bds"
+            else:
+                savedir = "far_bds"
+
         np.savetxt(
-            "/home/sblunt/eccentricities/lee_posteriors/ecc_{}_pl{}.csv".format(
-                pl[1].hostname, int(pl[1].pl_index)
+            "/home/sblunt/eccentricities/lee_posteriors/{}/ecc_{}_pl{}.csv".format(
+                savedir, pl[1].hostname, int(pl[1].pl_index)
             ),
             ecc_posterior,
             delimiter=",",
         )
         np.savetxt(
-            "/home/sblunt/eccentricities/lee_posteriors/K_{}_pl{}.csv".format(
-                pl[1].hostname, int(pl[1].pl_index)
+            "/home/sblunt/eccentricities/lee_posteriors/{}/K_{}_pl{}.csv".format(
+                savedir, pl[1].hostname, int(pl[1].pl_index)
             ),
             K_posterior,
             delimiter=",",
         )
         np.savetxt(
-            "/home/sblunt/eccentricities/lee_posteriors/per_{}_pl{}.csv".format(
-                pl[1].hostname, int(pl[1].pl_index)
+            "/home/sblunt/eccentricities/lee_posteriors/{}/per_{}_pl{}.csv".format(
+                savedir, pl[1].hostname, int(pl[1].pl_index)
             ),
             per_posterior,
             delimiter=",",

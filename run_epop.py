@@ -8,13 +8,7 @@ import matplotlib.pyplot as plt
 
 # TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
 
-# TODO:
-
-# Finalize log(completeness) model -> update per limits to be consistent
-# Finalize sample selection
-# idea: compute in region of parameter space before we would start not resolving trends.
-# Add orbital period on top of legacy_sample plot —> see lee’s paper fig 2.
-# To get around trend issue, choose orbital periods with baselines > 15 yrs? Or maybe 30 yr, reasoning that half an orbit would not be fit as just a trend?
+# TODO: explore sample selection
 # 5 - 10 au—> market as eccentricities of “jupiter-saturn sep” giant planets
 
 # TODO: interpretation: could it be an age effect or a stellar mass effect?
@@ -59,15 +53,8 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         e_array,
         k_array,
         per_array,
-        coefs=[
-            -2.53632913e00,
-            5.59228559e-04,
-            -1.76563921e-01,
-            2.35817647e-01,
-            1.84698929e-01,
-            -2.19930578e-05,
-        ],
-        intercept=2.184835489386459,
+        coefs=[-8.25281231e-01, 2.43409446e-03, -2.60935142e-05],
+        intercept=-0.49553009355577227,
     ):
         """
         Returns the fraction of systems that are observable for a given ecc/k/per array,
@@ -76,20 +63,11 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         The fit is performed in completeness_3D.py, and the fitted values are
         used as the default inputs here.
         """
-        completeness = (
-            coefs[0] * e_array
-            + coefs[1] * k_array
-            + coefs[2] * np.log(per_array)
-            + coefs[3] * e_array**2
-            + coefs[4] * e_array * np.log(per_array)
-            + coefs[5] * k_array * np.log(per_array)
+        log_completeness = (
+            coefs[0] * e_array + coefs[1] * k_array + coefs[2] * per_array
         ) + intercept
 
-        # mask nonphysical values
-        # completeness[(completeness < 0) | (completeness > 1)] = 0.0
-        import pdb
-
-        pdb.set_trace()
+        completeness = np.exp(log_completeness)
 
         return completeness
 
@@ -114,7 +92,7 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         else:
             system_sums = np.array(
                 [
-                    np.sum(  # if a posterior sample has a completeness of ~0, we need to treat that differently than just a low completeness
+                    np.sum(
                         beta.pdf(ecc_post, a, b)
                         / self.threeD_completeness(ecc_post, k_post, per_post)
                     )
@@ -124,9 +102,6 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
                     )
                 ]
             )
-        import pdb
-
-        pdb.set_trace()
 
         log_likelihood = np.sum(np.log(system_sums))
 
@@ -141,26 +116,30 @@ per_posteriors = []
 n_samples = int(
     1e3
 )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
-for post_path in glob.glob("lee_posteriors/ecc_*.csv"):
-    ecc_post = pd.read_csv(post_path)
 
-    # downsample the posterior to feed into ePop!
-    ecc_post = np.random.choice(ecc_post.values.flatten(), size=n_samples)
-    ecc_posteriors.append(ecc_post)
+samples = ["far_bds", "far_planets"]
 
-for post_path in glob.glob("lee_posteriors/K_*.csv"):
-    K_post = pd.read_csv(post_path)
+for sam in samples:
+    for post_path in glob.glob("lee_posteriors/{}/ecc_*.csv".format(sam)):
+        ecc_post = pd.read_csv(post_path)
 
-    # downsample the posterior to feed into ePop!
-    K_post = np.random.choice(K_post.values.flatten(), size=n_samples)
-    K_posteriors.append(K_post)
+        # downsample the posterior to feed into ePop!
+        ecc_post = np.random.choice(ecc_post.values.flatten(), size=n_samples)
+        ecc_posteriors.append(ecc_post)
 
-for post_path in glob.glob("lee_posteriors/per_*.csv"):
-    per_post = pd.read_csv(post_path)
+    for post_path in glob.glob("lee_posteriors/{}/K_*.csv".format(sam)):
+        K_post = pd.read_csv(post_path)
 
-    # downsample the posterior to feed into ePop!
-    per_post = np.random.choice(per_post.values.flatten(), size=n_samples)
-    per_posteriors.append(per_post)
+        # downsample the posterior to feed into ePop!
+        K_post = np.random.choice(K_post.values.flatten(), size=n_samples)
+        K_posteriors.append(K_post)
+
+    for post_path in glob.glob("lee_posteriors/{}/per_*.csv".format(sam)):
+        per_post = pd.read_csv(post_path)
+
+        # downsample the posterior to feed into ePop!
+        per_post = np.random.choice(per_post.values.flatten(), size=n_samples)
+        per_posteriors.append(per_post)
 
 n_posteriors = len(ecc_posteriors)
 sorted_by_med_idxs = np.flip(
@@ -232,8 +211,13 @@ nsteps = 200
 beta_samples = like.sample(nsteps, burn_steps=burn_steps, nwalkers=nwalkers)
 
 savedir = f"plots/{h_prior}Prior"
+
+for sam in samples:
+    savedir += f"_{sam}"
+
 if oneD_completeness:
     savedir += "_1Dcompleteness"
+
 if not os.path.exists(savedir):
     os.mkdir(savedir)
 

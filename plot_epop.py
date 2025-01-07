@@ -10,8 +10,13 @@ import corner
 # read in MCMC samples
 hprior = "gaussian"
 oneDcompleteness = False
+samples = ["far_bds", "far_planets"]
 
 savedir = f"plots/{hprior}Prior"
+
+for sam in samples:
+    savedir += f"_{sam}"
+
 if oneDcompleteness:
     savedir += "_1Dcompleteness"
 

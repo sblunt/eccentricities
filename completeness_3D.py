@@ -21,13 +21,14 @@ import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
+import time
 
-n_ecc_bins = 10
-n_per_bins = 10
-n_k_bins = 10
+n_ecc_bins = 12
+n_per_bins = 12
+n_k_bins = 12
 
 ecc = np.linspace(0, 1, n_ecc_bins, endpoint=False)
-per = np.linspace(1e3, 2e5, n_per_bins, endpoint=False)
+per = np.logspace(np.log10(300), np.log10(2e5), n_per_bins, endpoint=False)
 K = np.linspace(10, 300, n_k_bins, endpoint=False)
 
 d_ecc = ecc[1:] - ecc[:-1]
@@ -38,9 +39,9 @@ d_per = per[1:] - per[:-1]
 recoveries = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
 injections = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
 
-clsi_path = "/Users/bluez3303/Documents/GitHub"  # "/home/sblunt"
+clsi_path = "/home/sblunt"
 inj_rec_files = glob.glob(f"{clsi_path}/CLSI/completeness/recoveries_all/*.csv")
-for f in inj_rec_files:
+for f in inj_rec_files[:10]:
     df = pd.read_csv(f)
 
     df["ecc_completeness_bins"] = np.nan
@@ -105,17 +106,17 @@ for f in inj_rec_files:
             ] += 1
 completeness = recoveries / injections
 
-n_features = 5
+n_features = 3
 X = np.ones((n_ecc_bins, n_k_bins, n_per_bins, n_features))
 for i in np.arange(n_ecc_bins):
     for j in np.arange(n_k_bins):
         for k in np.arange(n_per_bins):
             X[i, j, k, 0] = ecc[i]
             X[i, j, k, 1] = K[j]
-            X[i, j, k, 2] = np.log(per[k])
+            X[i, j, k, 2] = per[k]
             # X[i, j, k, 3] = ecc[i] ** 2
-            X[i, j, k, 3] = ecc[i] * np.log(per[k])
-            X[i, j, k, 4] = K[j] * np.log(per[k])
+            # X[i, j, k, 3] = ecc[i] * np.log(per[k])
+            # X[i, j, k, 3] = K[j] * np.log(per[k])
             # X[i, j, k, 5] = K[j] * ecc[k]
 
 
@@ -143,6 +144,8 @@ reg = LinearRegression().fit(
 
 print(reg.coef_)
 print(reg.intercept_)
+
+time.sleep(5)
 
 # save completeness map for use in epop
 np.save("completeness.npy", completeness)
@@ -188,11 +191,11 @@ for i in np.arange(n_k_bins):
             [
                 0.5,
                 K[i],
-                np.log(per[j]),
+                per[j],
                 # 1 / 3,
-                0.5 * np.log(per[j]),
+                # 0.5 * np.log(per[j]),
                 # K[i] * np.log(per[j]),
-                K[i] * 0.5,
+                # K[i] * 0.5,
             ]
         )
         model_completeness_K_per[i, j] = np.exp(
@@ -232,16 +235,18 @@ for i in np.arange(n_ecc_bins):
     for j in np.arange(n_k_bins):
         P1 = per[-1] + d_per[-1]
         P0 = per[0]
-        C = (P1 * (np.log(P1) - 1) - P0 * (np.log(P0) - 1)) / (P1 - P0)
+        C = 0.5 * (
+            (P1**2 - P0**2) / (P1 - P0)
+        )  # (P1 * (np.log(P1) - 1) - P0 * (np.log(P0) - 1)) / (P1 - P0)
         X_pred = np.array(
             [
                 ecc[i],
                 K[j],
                 C,  # np.log(P1) - np.log(P0),  # 0.5 * (P1**2 - P0**2) / (P1 - P0),
                 # ecc[i] ** 2,
-                ecc[i] * C,  # ,(np.log(P1) - np.log(P0)),
+                # ecc[i] * C,  # ,(np.log(P1) - np.log(P0)),
                 # K[j] * C,  # (np.log(P1) - np.log(P0)),
-                K[j] * ecc[i],
+                # K[j] * ecc[i],
             ]
         )
         model_completeness_ecc_K[i, j] = np.exp(
@@ -281,11 +286,11 @@ for i in np.arange(n_ecc_bins):
             [
                 ecc[i],
                 0.5 * (K1**2 - K0**2) / (K1 - K0),
-                np.log(per[j]),
+                per[j],
                 # ecc[i] ** 2,
-                ecc[i] * np.log(per[j]),
+                # ecc[i] * np.log(per[j]),
                 # 0.5 * np.log(per[j]) * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
-                0.5 * ecc[i] * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
+                # 0.5 * ecc[i] * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
             ]
         )
         model_completeness_ecc_per[i, j] = np.exp(
@@ -294,7 +299,12 @@ for i in np.arange(n_ecc_bins):
 
 fig, ax = plt.subplots(2, 1)
 ax[0].imshow(model_completeness_ecc_per.T)
-plt.imshow(completeness_ecc_per.T)
+plt.imshow(
+    completeness_ecc_per.T,
+    origin="upper",
+    # extent=[0, .95, per[-1], per[0]],
+    aspect="auto",
+)
 for a in ax:
     a.set_xticks(
         np.arange(len(ecc)),
@@ -306,12 +316,27 @@ for a in ax:
     )
     a.tick_params(axis="x", rotation=90)
 
-plt.ylabel("ecc")
+# TODO: fix code below
+
+# overplot the actual detections
+# for post_path in glob.glob("lee_posteriors/*/ecc_*.csv")[:2]:
+#     pl_name = post_path.split("/")[-1].split(".")[0].split("ecc_")[1]
+#     category = post_path.split("/")[-2]
+#     per_post = pd.read_csv(f"lee_posteriors/{category}/per_{pl_name}.csv")
+#     K_post = pd.read_csv(f"lee_posteriors/{category}/K_{pl_name}.csv")
+#     ecc_post = pd.read_csv(post_path)
+#     plt.scatter([np.median(ecc_post)], [np.median(per_post)])
+
+plt.xlabel("ecc")
 plt.ylabel("P [d]")
 plt.tight_layout()
 ax_cbar = plt.colorbar()
 ax_cbar.set_label("completeness")
 plt.savefig("plots/completeness_ecc_per.png", dpi=250)
+
+"""
+PLOT INJECTIONS
+"""
 
 plt.figure()
 plt.imshow(injections_ecc_K.T)
