@@ -27,7 +27,7 @@ legacy_planets_inseprange = legacy_planets[
 
 # this is making a selection by the median model msini = most probable mass
 legacy_bds = legacy_planets_inseprange[
-    (legacy_planets.mass_med > 15) & (legacy_planets.mass_med < 75)
+    (legacy_planets.mass_med > 15) & (legacy_planets.mass_med < 50)
 ]
 
 # TODO: make a stronger statistical argument that the samples overlap in mass

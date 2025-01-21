@@ -42,7 +42,7 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
 
         self.apply_oneD_completeness = oneD_completeness
 
-    def oneD_completeness(self, e_array, m=-0.247, b=0.296):
+    def oneD_completeness(self, e_array, m=-0.325, b=0.348):
         """
         Returns the fraction of systems that are observable for a given eccentricity array
         """
@@ -53,8 +53,8 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         e_array,
         k_array,
         per_array,
-        coefs=[-8.25281231e-01, 2.43409446e-03, -2.60935142e-05],
-        intercept=-0.49553009355577227,
+        coefs=[-2.5192314, 1.10407362, -1.00269867],
+        intercept=1.0559583570939821,
     ):
         """
         Returns the fraction of systems that are observable for a given ecc/k/per array,
@@ -64,10 +64,15 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         used as the default inputs here.
         """
         log_completeness = (
-            coefs[0] * e_array + coefs[1] * k_array + coefs[2] * per_array
+            coefs[0] * e_array
+            + coefs[1] * np.log10(k_array)
+            + coefs[2] * np.log10(per_array)
         ) + intercept
 
         completeness = np.exp(log_completeness)
+        completeness[completeness > 1] = (
+            1  # we can't have greater than 100% completeness
+        )
 
         return completeness
 
@@ -117,7 +122,9 @@ n_samples = int(
     1e3
 )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 
-samples = ["far_bds", "far_planets"]
+samples = ["close_bds", "far_bds"]  # , "close_planets", "far_planets"]
+h_prior = "log-uniform"
+oneD_completeness = False
 
 for sam in samples:
     for post_path in glob.glob("lee_posteriors/{}/ecc_*.csv".format(sam)):
@@ -195,8 +202,7 @@ if make_tower_plot:
     ax[-1, 1].set_xlabel("K [m/s]")
     plt.savefig("plots/rv_tower_plot.png", dpi=250)
 
-h_prior = "gaussian"
-oneD_completeness = False
+
 like = RVPop_Likelihood(
     ecc_posteriors=ecc_posteriors,
     K_posteriors=K_posteriors,

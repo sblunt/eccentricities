@@ -1,19 +1,8 @@
 """
-This module builds a 3D completeness map in K-per-ecc, based on the 
-injection recovery tests performed by BJ Fulton.
+This module builds a 1D completeness map as a function of eccentricity for RV planets
+in the mass range 2-15 Mjup and semimajor axis range 5-100 au. 
 
-These injection-recovery test outputs are in: /home/sblunt/CLSI/completeness/recoveries_all
-
-NOTE: BJ provides the recovered parameters as well as a binary "recovered/not recovered," 
-so we could think about incorporating/checking whether "recovered" means "recovered
-correctly." However, visually the countours look pretty smooth, so I'm not super
-worried about this.
-
-K values of pls in sample: 37, 46, 121, 170, 14, 52, 196, 295, 25, 26, 130, 35, 28, 85
--> range = 10-300
-
-P values of pls in sample: 4e4, 2.5e4, 4.7e3, 7e3, 9.5e4, 5e3, 2e4, 2e4, 7e3, 1e4, 3e4, 4e3, 8e3, 5e3
--> range = 1e3 - 2e5
+Based on the injection recovery tests performed by BJ Fulton.
 """
 
 import numpy as np
@@ -21,67 +10,55 @@ import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
-import time
-
-n_ecc_bins = 12
-n_per_bins = 12
-n_k_bins = 12
-
-ecc = np.linspace(0, 1, n_ecc_bins, endpoint=False)
-per = np.logspace(np.log10(300), np.log10(2e5), n_per_bins, endpoint=False)
-K = np.linspace(10, 300, n_k_bins, endpoint=False)
-
-d_ecc = ecc[1:] - ecc[:-1]
-d_K = K[1:] - K[:-1]
-d_per = per[1:] - per[:-1]
 
 
-recoveries = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
-injections = np.zeros((n_ecc_bins, n_per_bins, n_k_bins))
+n_ecc_bins = 19
+n_per_bins = 21
+n_k_bins = 23
 
-clsi_path = "/home/sblunt"
-inj_rec_files = glob.glob(f"{clsi_path}/CLSI/completeness/recoveries_all/*.csv")
-for f in inj_rec_files[:10]:
+
+ecc = np.linspace(0, 1, n_ecc_bins + 1)
+per = np.logspace(np.log10(300), np.log10(1e6), n_per_bins + 1)
+K = np.logspace(
+    1,
+    np.log10(1000),
+    n_k_bins + 1,
+)
+
+
+recoveries = np.zeros((n_ecc_bins, n_k_bins, n_per_bins))
+injections = np.zeros((n_ecc_bins, n_k_bins, n_per_bins))
+
+inj_rec_files = glob.glob("/home/sblunt/CLSI/completeness/recoveries_all/*.csv")
+for f in inj_rec_files:
     df = pd.read_csv(f)
 
     df["ecc_completeness_bins"] = np.nan
     df["per_completeness_bins"] = np.nan
     df["K_completeness_bins"] = np.nan
     for i in np.arange(len(ecc) - 1):
-
         df["ecc_completeness_bins"][
-            ((df.inj_e.values >= ecc[i]) & (df.inj_e.values < ecc[i] + d_ecc[i]))
+            ((df.inj_e.values >= ecc[i]) & (df.inj_e.values < ecc[i + 1]))
         ] = i
-    # account for edge of range
-    df["ecc_completeness_bins"][(df.inj_e.values >= ecc[i + 1])] = i + 1
-
     for i in np.arange(len(per) - 1):
         df["per_completeness_bins"][
-            (
-                (df.inj_period.values >= per[i])
-                & (df.inj_period.values < per[i] + d_per[i])
-            )
+            ((df.inj_period.values >= per[i]) & (df.inj_period.values < per[i + 1]))
         ] = i
-    # account for edge of range
-    df["per_completeness_bins"][(df.inj_period.values >= per[i + 1])] = i + 1
-
-    for i in np.arange(len(K) - 1):
+    for i in np.arange(len(per) - 1):
         df["K_completeness_bins"][
-            ((df.inj_k.values >= K[i]) & (df.inj_k.values < K[i] + d_K[i]))
+            ((df.inj_k.values >= K[i]) & (df.inj_k.values < K[i + 1]))
         ] = i
-    # account for edge of range
-    df["K_completeness_bins"][(df.inj_k.values >= K[i + 1])] = i + 1
 
     recovered_planets = df[df.recovered.values]
     unrecovered_planets = df[~df.recovered.values]
 
     for i, row in unrecovered_planets.iterrows():
+        # check if injected planet is in range
         if not np.isnan(
             row.K_completeness_bins
             + row.per_completeness_bins
             + row.ecc_completeness_bins
         ):
-
             injections[
                 int(row.ecc_completeness_bins),
                 int(row.K_completeness_bins),
@@ -89,6 +66,7 @@ for f in inj_rec_files[:10]:
             ] += 1
 
     for i, row in recovered_planets.iterrows():
+        # check if injected planet is in range
         if not np.isnan(
             row.K_completeness_bins
             + row.per_completeness_bins
@@ -104,255 +82,100 @@ for f in inj_rec_files[:10]:
                 int(row.K_completeness_bins),
                 int(row.per_completeness_bins),
             ] += 1
+
+# compute completeness
 completeness = recoveries / injections
 
+# compute marginalized completenesses
+completeness_K_per = np.nansum(completeness, axis=0) / n_ecc_bins
+completeness_per = np.nansum(completeness_K_per, axis=0) / n_k_bins
+completeness_ecc_K = np.nansum(completeness, axis=2) / n_per_bins
+completeness_ecc_per = np.nansum(completeness, axis=1) / n_k_bins
+
+# perform linear fit
 n_features = 3
 X = np.ones((n_ecc_bins, n_k_bins, n_per_bins, n_features))
 for i in np.arange(n_ecc_bins):
     for j in np.arange(n_k_bins):
         for k in np.arange(n_per_bins):
             X[i, j, k, 0] = ecc[i]
-            X[i, j, k, 1] = K[j]
-            X[i, j, k, 2] = per[k]
-            # X[i, j, k, 3] = ecc[i] ** 2
-            # X[i, j, k, 3] = ecc[i] * np.log(per[k])
-            # X[i, j, k, 3] = K[j] * np.log(per[k])
-            # X[i, j, k, 5] = K[j] * ecc[k]
-
+            X[i, j, k, 1] = np.log(
+                K[j]
+            )  # TODO: I want 1/per, uniform in log(K), possibly (log(K))**2
+            X[i, j, k, 2] = 1 / per[k]
 
 X = X.reshape((n_ecc_bins * n_k_bins * n_per_bins, n_features))
-
 completeness1d = completeness.flatten()
-mask = ~np.isnan(completeness1d)
+log_completeness = np.log(completeness1d)
 
-injections1d = injections.flatten()
+# weight samples using Poisson statistics from # of injections.
+# this weight should be 1 / the variance of each number. assuming
+# Poisson statistics, the variance in N, the number of samples.
+sample_weights = 1 / injections
 
-log_completeness = np.log(completeness1d[mask])
+# only include boxes with 0 injections or 0 recoveries in the linear fit
+mask = ((injections > 0) & (completeness > 0)).flatten()
 
-sample_weights = 1 / np.sqrt(injections1d[mask])
-
-# don't count points with completeness of 0 toward the fit
-sample_weights[np.isneginf(log_completeness)] = 0
-log_completeness[np.isneginf(log_completeness)] = 0
-
-# linear fit to log(completeness)
 reg = LinearRegression().fit(
     X[mask],
-    log_completeness,
-    sample_weight=sample_weights,
+    log_completeness[mask],
+    sample_weight=sample_weights.flatten()[mask],
 )
-
-print(reg.coef_)
-print(reg.intercept_)
-
-time.sleep(5)
-
-# save completeness map for use in epop
-np.save("completeness.npy", completeness)
-np.save("e_bins.npy", ecc)
-np.save("K_bins.npy", K)
-np.save("per_bins.npy", per)
-
-completeness_K_per = np.nansum(completeness, axis=0) / n_ecc_bins
-completeness_per = np.nansum(completeness_K_per, axis=0) / n_k_bins
-completeness_ecc_K = np.nansum(completeness, axis=2) / n_per_bins
-completeness_ecc_per = np.nansum(completeness, axis=1) / n_k_bins
-injections_ecc_K = np.nansum(injections, axis=2)
-
-
-"""
-PER 1D PLOT
-"""
-
-plt.figure()
-plt.plot(per, completeness_per)
-
-reg_per = LinearRegression().fit(
-    np.log10(per).reshape(-1, 1),
-    completeness_per,
-    sample_weight=1 / np.sqrt(np.nansum(injections, axis=(0, 1))),
-)
-plt.text(4e4, 0.175, f"m={reg_per.coef_}")
-plt.plot(per, reg_per.predict(np.log10(per.reshape(-1, 1))))
-plt.xscale("log")
-plt.savefig("plots/completeness_per.png", dpi=250)
-
-# compare with https://www.astroexplorer.org/details/apjsabfcc1f1
 
 """
 K-PER PLOT
 """
-
-
 model_completeness_K_per = np.zeros((n_k_bins, n_per_bins))
 for i in np.arange(n_k_bins):
     for j in np.arange(n_per_bins):
         X_pred = np.array(
             [
                 0.5,
-                K[i],
-                per[j],
-                # 1 / 3,
-                # 0.5 * np.log(per[j]),
-                # K[i] * np.log(per[j]),
-                # K[i] * 0.5,
+                np.log(K[i]),
+                1 / per[j],
             ]
         )
         model_completeness_K_per[i, j] = np.exp(
             reg.predict(X_pred.reshape((1, n_features)))
         )
 
-fig, ax = plt.subplots(2, 1)
-ax[0].imshow(model_completeness_K_per.T, origin="lower")
-plt.imshow(completeness_K_per.T, origin="lower")
-for a in ax:
-    a.set_xticks(
-        np.arange(len(K)),
-        map(lambda x: np.format_float_positional(x, precision=2), K),
-    )
-    a.set_yticks(
-        np.arange(len(per)),
-        map(
-            lambda x: np.format_float_positional(x, precision=2),
-            per,
-        ),
-    )
-    a.tick_params(axis="x", rotation=90)
+K_per_mask = (completeness_K_per == 0) | (np.isnan(completeness_K_per))
 
-ax[0].set_xlabel("K [m/s]")
-ax[0].set_ylabel("P [d]")
-plt.tight_layout()
-ax_cbar = plt.colorbar()
-ax_cbar.set_label("completeness")
+fig, ax = plt.subplots(2, 1, figsize=(5, 10))
+
+ax[0].pcolormesh(K, per, model_completeness_K_per.T, shading="auto")
+ax[1].pcolormesh(
+    K, per, np.ma.array(completeness_K_per.T, mask=K_per_mask.T), shading="auto"
+)
+
+ax[0].set_title("completeness model")
+ax[1].set_title("actual injections/recoveries")
+
+for a in ax:
+    a.set_xscale("log")
+    a.set_yscale("log")
+    a.set_xlabel("K [m/s]")
+    a.set_ylabel("per [d]")
+    a.set_xlim(K[0], K[-1])
+    a.set_ylim(per[0], per[-1])
+
+# overplot actual detections
+for post_path in glob.glob("lee_posteriors/*/ecc_*.csv"):
+    pl_name = post_path.split("/")[-1].split(".")[0].split("ecc_")[1]
+    category = post_path.split("/")[-2]
+    per_post = pd.read_csv(f"lee_posteriors/{category}/per_{pl_name}.csv")
+    K_post = pd.read_csv(f"lee_posteriors/{category}/K_{pl_name}.csv")
+
+    per_quants = np.quantile(per_post, [0.16, 0.5, 0.84])
+    K_quants = np.quantile(K_post, [0.16, 0.5, 0.84])
+
+    plt.scatter([K_quants[1]], [per_quants[1]], color="white", ec="grey", zorder=10)
+    plt.errorbar(
+        [K_quants[1]],
+        [per_quants[1]],
+        xerr=([K_quants[1] - K_quants[0]], [K_quants[2] - K_quants[1]]),
+        yerr=([per_quants[1] - per_quants[0]], [per_quants[2] - per_quants[1]]),
+        color="grey",
+    )
+
 plt.savefig("plots/completeness_K_per.png", dpi=250)
-
-"""
-ECC-K PLOT
-"""
-
-model_completeness_ecc_K = np.zeros((n_ecc_bins, n_k_bins))
-for i in np.arange(n_ecc_bins):
-    for j in np.arange(n_k_bins):
-        P1 = per[-1] + d_per[-1]
-        P0 = per[0]
-        C = 0.5 * (
-            (P1**2 - P0**2) / (P1 - P0)
-        )  # (P1 * (np.log(P1) - 1) - P0 * (np.log(P0) - 1)) / (P1 - P0)
-        X_pred = np.array(
-            [
-                ecc[i],
-                K[j],
-                C,  # np.log(P1) - np.log(P0),  # 0.5 * (P1**2 - P0**2) / (P1 - P0),
-                # ecc[i] ** 2,
-                # ecc[i] * C,  # ,(np.log(P1) - np.log(P0)),
-                # K[j] * C,  # (np.log(P1) - np.log(P0)),
-                # K[j] * ecc[i],
-            ]
-        )
-        model_completeness_ecc_K[i, j] = np.exp(
-            reg.predict(X_pred.reshape((1, n_features)))
-        )
-
-fig, ax = plt.subplots(2, 1)
-ax[0].imshow(model_completeness_ecc_K.T)
-plt.imshow(completeness_ecc_K.T)
-for a in ax:
-    a.set_xticks(
-        np.arange(len(ecc)),
-        map(lambda x: np.format_float_positional(x, precision=2), ecc),
-    )
-    a.set_yticks(
-        np.arange(len(K)),
-        map(lambda x: np.format_float_positional(x, precision=2), K),
-    )
-    a.tick_params(axis="x", rotation=90)
-
-plt.ylabel("K [m/s]")
-plt.xlabel("ecc")
-plt.tight_layout()
-ax_cbar = plt.colorbar()
-ax_cbar.set_label("completeness")
-plt.savefig("plots/completeness_ecc_K.png", dpi=250)
-
-"""
-ECC-PER PLOT
-"""
-model_completeness_ecc_per = np.zeros((n_ecc_bins, n_per_bins))
-for i in np.arange(n_ecc_bins):
-    for j in np.arange(n_per_bins):
-        K1 = K[-1] + d_K[-1]
-        K0 = K[0]
-        X_pred = np.array(
-            [
-                ecc[i],
-                0.5 * (K1**2 - K0**2) / (K1 - K0),
-                per[j],
-                # ecc[i] ** 2,
-                # ecc[i] * np.log(per[j]),
-                # 0.5 * np.log(per[j]) * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
-                # 0.5 * ecc[i] * (K[1] ** 2 - K[0] ** 2) / (K1 - K0),
-            ]
-        )
-        model_completeness_ecc_per[i, j] = np.exp(
-            reg.predict(X_pred.reshape((1, n_features)))
-        )
-
-fig, ax = plt.subplots(2, 1)
-ax[0].imshow(model_completeness_ecc_per.T)
-plt.imshow(
-    completeness_ecc_per.T,
-    origin="upper",
-    # extent=[0, .95, per[-1], per[0]],
-    aspect="auto",
-)
-for a in ax:
-    a.set_xticks(
-        np.arange(len(ecc)),
-        map(lambda x: np.format_float_positional(x, precision=2), ecc),
-    )
-    a.set_yticks(
-        np.arange(len(per)),
-        map(lambda x: np.format_float_positional(x, precision=2), per),
-    )
-    a.tick_params(axis="x", rotation=90)
-
-# TODO: fix code below
-
-# overplot the actual detections
-# for post_path in glob.glob("lee_posteriors/*/ecc_*.csv")[:2]:
-#     pl_name = post_path.split("/")[-1].split(".")[0].split("ecc_")[1]
-#     category = post_path.split("/")[-2]
-#     per_post = pd.read_csv(f"lee_posteriors/{category}/per_{pl_name}.csv")
-#     K_post = pd.read_csv(f"lee_posteriors/{category}/K_{pl_name}.csv")
-#     ecc_post = pd.read_csv(post_path)
-#     plt.scatter([np.median(ecc_post)], [np.median(per_post)])
-
-plt.xlabel("ecc")
-plt.ylabel("P [d]")
-plt.tight_layout()
-ax_cbar = plt.colorbar()
-ax_cbar.set_label("completeness")
-plt.savefig("plots/completeness_ecc_per.png", dpi=250)
-
-"""
-PLOT INJECTIONS
-"""
-
-plt.figure()
-plt.imshow(injections_ecc_K.T)
-plt.xticks(
-    np.arange(len(ecc)),
-    map(lambda x: np.format_float_positional(x, precision=2), ecc),
-)
-plt.yticks(
-    np.arange(len(K)),
-    map(lambda x: np.format_float_positional(x, precision=2), K),
-)
-plt.tick_params(axis="x", rotation=90)
-
-plt.ylabel("K [m/s]")
-plt.xlabel("ecc")
-plt.tight_layout()
-ax_cbar = plt.colorbar()
-ax_cbar.set_label("injections")
-plt.savefig("plots/ecc_K_injections.png", dpi=250)

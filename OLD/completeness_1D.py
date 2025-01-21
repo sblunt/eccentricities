@@ -16,7 +16,7 @@ n_k_bins = 25
 
 
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-per = np.logspace(np.log10(300), 6, n_per_bins + 1)
+per = np.linspace(300, 1e6, n_per_bins + 1)
 K = np.logspace(
     1,
     np.log10(1000),
@@ -125,7 +125,7 @@ plt.fill_between(
     color="rebeccapurple",
     alpha=0.2,
 )
-plt.xscale("log")
+# plt.xscale("log")
 plt.xlabel("period [d]")
 plt.ylabel("RV completeness")
 plt.savefig("plots/completeness_per.png", dpi=250)
