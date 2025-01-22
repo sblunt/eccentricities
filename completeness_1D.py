@@ -83,14 +83,14 @@ for f in inj_rec_files[:100]:
 
 # compute uncertainty on completeness (using Poisson statistics from # of injections)
 completeness = recoveries / injections
-uncertainty = 1 / np.sqrt(injections)
+variance = 1 / injections
 
 plt.figure()
 plt.plot(ecc[:-1], completeness, color="rebeccapurple")
 plt.fill_between(
     ecc[:-1],
-    completeness + uncertainty,
-    completeness - uncertainty,
+    completeness + np.sqrt(variance),
+    completeness - np.sqrt(variance),
     color="rebeccapurple",
     alpha=0.2,
 )
@@ -99,7 +99,7 @@ plt.fill_between(
 (
     m,
     b,
-) = np.polyfit(ecc[:-1], completeness, 1, w=1 / uncertainty)
+) = np.polyfit(ecc[:-1], completeness, 1, w=1 / variance)
 plt.plot(
     ecc[:-1],
     m * ecc[:-1] + b,
@@ -114,14 +114,14 @@ plt.savefig("plots/completeness_ecc.png", dpi=250)
 
 
 completeness = recoveries_per / injections_per
-uncertainty = 1 / np.sqrt(injections_per)
+variance = 1 / injections_per
 
 plt.figure()
 plt.plot(per[:-1], completeness, color="rebeccapurple")
 plt.fill_between(
     per[:-1],
-    completeness + uncertainty,
-    completeness - uncertainty,
+    completeness + np.sqrt(variance),
+    completeness - np.sqrt(variance),
     color="rebeccapurple",
     alpha=0.2,
 )
@@ -131,17 +131,24 @@ plt.ylabel("RV completeness")
 plt.savefig("plots/completeness_per.png", dpi=250)
 
 completeness = recoveries_k / injections_k
-uncertainty = 1 / np.sqrt(injections_k)
+variance = 1 / injections_k
 
 plt.figure()
 plt.plot(K[:-1], completeness, color="rebeccapurple")
 plt.fill_between(
     K[:-1],
-    completeness + uncertainty,
-    completeness - uncertainty,
+    completeness + np.sqrt(variance),
+    completeness - np.sqrt(variance),
     color="rebeccapurple",
     alpha=0.2,
 )
+
+# overplot a deg 2 polynomial fit
+(
+    m,
+    b,
+) = np.polyfit(ecc[:-1], completeness, 2, w=1 / variance)
+
 plt.xscale("log")
 plt.xlabel("K [m/s]")
 plt.ylabel("RV completeness")
