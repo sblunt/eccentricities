@@ -6,22 +6,14 @@ import glob
 import os
 import matplotlib.pyplot as plt
 
-# TODO: jason suggests expanding sample size in mass/sma until we can get a strongly-constrained posterior
-
-# TODO: explore sample selection
-# 5 - 10 au—> market as eccentricities of “jupiter-saturn sep” giant planets
-
-# TODO: interpretation: could it be an age effect or a stellar mass effect?
-# TODO: interpretation: think about multiplicity of imaged vs RV systems
-
 
 class RVPop_Likelihood(hier_sim.Pop_Likelihood):
     def __init__(
         self,
         fnames=None,
         ecc_posteriors=None,
-        K_posteriors=None,
-        per_posteriors=None,
+        msini_posteriors=None,
+        sma_posteriors=None,
         prior=None,
         beta_max=100,
         mu=0.69,
@@ -37,44 +29,67 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
             std=std,
         )
 
-        self.K_posteriors = K_posteriors
-        self.per_posteriors = per_posteriors
+        self.msini_posteriors = msini_posteriors
+        self.sma_posteriors = sma_posteriors
 
         self.apply_oneD_completeness = oneD_completeness
+
+        # read in 3D completeness model
+        completeness = np.load("completeness_model/completeness.npy")
+        ecc_bins = np.load("completeness_model/ecc_bins.npy")
+        sma_bins = np.load("completeness_model/sma_bins.npy")
+        msini_bins = np.load("completeness_model/msini_bins.npy")
+
+        # assign completeness indices to each posterior sample
+        """
+        Returns the fraction of systems that are observable for a given ecc/msini/sma array,
+        accounting for covariances between the three. Completeness is calculated by directly
+        adding up BJ's recoveries and dividing by his injections, then using linear
+        interpolation to fill in the gaps in the 3d parameter space. The values
+        are calculated in make_frelikh_comparison_plot.py. Strictly speaking, BJ did
+        different numbers of injections as a function of eccentricity, so the completeness
+        values at, e.g., higher eccentricity should have higher uncertainties.
+        TODO: think about this more. Calculate typical uncertainty in completeness using Poisson
+        and decide if it matters.
+        """
+        n_posteriors = len(self.msini_posteriors)
+        self.completeness = []
+
+        for k in range(n_posteriors):
+            post_len = len(self.sma_posteriors[k])
+            completeness_labels_i = 1000 * np.ones((post_len, 3), dtype=int)
+
+            for i in range(len(ecc_bins) - 1):
+                ecc_mask = (self.ecc_posteriors[k] >= ecc_bins[i]) & (
+                    self.ecc_posteriors[k] < ecc_bins[i + 1]
+                )
+                completeness_labels_i[ecc_mask, 0] = i
+            for i in range(len(sma_bins) - 1):
+                sma_mask = (self.sma_posteriors[k] >= sma_bins[i]) & (
+                    self.sma_posteriors[k] < sma_bins[i + 1]
+                )
+                completeness_labels_i[sma_mask, 1] = i
+            for i in range(len(msini_bins) - 1):
+                msini_mask = (self.msini_posteriors[k] >= msini_bins[i]) & (
+                    self.msini_posteriors[k] < msini_bins[i + 1]
+                )
+                completeness_labels_i[msini_mask, 2] = i
+
+            completeness_post_i = np.zeros(post_len)
+            for i in range(post_len):
+                a, b, c = completeness_labels_i[i]
+                if a + b + c < 100:
+                    completeness_post_i[i] = completeness[a, b, c]
+                else:
+                    completeness_post_i[i] = 0
+
+            self.completeness.append(completeness_post_i)
 
     def oneD_completeness(self, e_array, m=-0.325, b=0.348):
         """
         Returns the fraction of systems that are observable for a given eccentricity array
         """
         return m * e_array + b
-
-    def threeD_completeness(
-        self,
-        e_array,
-        k_array,
-        per_array,
-        coefs=[-2.5192314, 1.10407362, -1.00269867],
-        intercept=1.0559583570939821,
-    ):
-        """
-        Returns the fraction of systems that are observable for a given ecc/k/per array,
-        accounting for covariances between the three. Completeness is treated as
-        a linear combination of features defined from the three input arrays.
-        The fit is performed in completeness_3D.py, and the fitted values are
-        used as the default inputs here.
-        """
-        log_completeness = (
-            coefs[0] * e_array
-            + coefs[1] * np.log10(k_array)
-            + coefs[2] * np.log10(per_array)
-        ) + intercept
-
-        completeness = np.exp(log_completeness)
-        completeness[completeness > 1] = (
-            1  # we can't have greater than 100% completeness
-        )
-
-        return completeness
 
     def calc_likelihood(self, beta_params):
         """
@@ -98,15 +113,20 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
             system_sums = np.array(
                 [
                     np.sum(
-                        beta.pdf(ecc_post, a, b)
-                        / self.threeD_completeness(ecc_post, k_post, per_post)
+                        np.nan_to_num(
+                            beta.pdf(ecc_post, a, b) / self.completeness[i],
+                            posinf=0.0,
+                            nan=0.0,
+                        )
                     )
                     / np.shape(ecc_post)[0]
-                    for ecc_post, k_post, per_post in zip(
-                        self.ecc_posteriors, self.K_posteriors, self.per_posteriors
-                    )
+                    for i, ecc_post in enumerate(self.ecc_posteriors)
                 ]
             )
+
+        # TODO: I added a nansum above because some completeness values are 0. This
+        # effectively removes posterior samples that are in parts of parameter
+        # space the survey is 0% complete to. I think this makes sense, but think about this a little more.
 
         log_likelihood = np.sum(np.log(system_sums))
 
@@ -116,14 +136,14 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
 
 
 ecc_posteriors = []
-K_posteriors = []
-per_posteriors = []
+msini_posteriors = []
+sma_posteriors = []
 n_samples = int(
     1e3
 )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 
-samples = ["close_bds", "far_bds"]  # , "close_planets", "far_planets"]
-h_prior = "log-uniform"
+samples = ["highmass"]  # , "highmass"]
+h_prior = None
 oneD_completeness = False
 
 for sam in samples:
@@ -134,79 +154,26 @@ for sam in samples:
         ecc_post = np.random.choice(ecc_post.values.flatten(), size=n_samples)
         ecc_posteriors.append(ecc_post)
 
-    for post_path in glob.glob("lee_posteriors/{}/K_*.csv".format(sam)):
-        K_post = pd.read_csv(post_path)
+    for post_path in glob.glob("lee_posteriors/{}/msini_*.csv".format(sam)):
+        msini_post = pd.read_csv(post_path)
 
         # downsample the posterior to feed into ePop!
-        K_post = np.random.choice(K_post.values.flatten(), size=n_samples)
-        K_posteriors.append(K_post)
+        msini_post = np.random.choice(msini_post.values.flatten(), size=n_samples)
+        msini_posteriors.append(msini_post)
 
-    for post_path in glob.glob("lee_posteriors/{}/per_*.csv".format(sam)):
-        per_post = pd.read_csv(post_path)
+    for post_path in glob.glob("lee_posteriors/{}/sma_*.csv".format(sam)):
+        sma_post = pd.read_csv(post_path)
 
         # downsample the posterior to feed into ePop!
-        per_post = np.random.choice(per_post.values.flatten(), size=n_samples)
-        per_posteriors.append(per_post)
+        sma_post = np.random.choice(sma_post.values.flatten(), size=n_samples)
+        sma_posteriors.append(sma_post)
 
 n_posteriors = len(ecc_posteriors)
-sorted_by_med_idxs = np.flip(
-    np.argsort([np.median(ecc_post) for ecc_post in ecc_posteriors])
-)
-
-# tower plot
-make_tower_plot = False
-if make_tower_plot:
-    print("Making tower plot!")
-    fig, ax = plt.subplots(15, 3, figsize=(4, 11))
-    plt.subplots_adjust(hspace=0)
-
-    nbins = 50
-    for i in np.arange(n_posteriors):
-        ax[i, 0].hist(
-            ecc_posteriors[sorted_by_med_idxs[i]],
-            bins=nbins,
-            color="rebeccapurple",
-            histtype="step",
-            alpha=0.5,
-            density=True,
-        )
-        ax[i, 0].set_yticks([])
-        ax[i, 0].set_xlim(0, 1)
-        ax[i, 1].hist(
-            K_posteriors[sorted_by_med_idxs[i]],
-            bins=nbins,
-            color="rebeccapurple",
-            histtype="step",
-            alpha=0.5,
-            density=True,
-            range=(0, 1000),
-        )
-        ax[i, 1].set_yticks([])
-        ax[i, 1].set_xlim(1, 1000)
-
-        ax[i, 2].hist(
-            per_posteriors[sorted_by_med_idxs[i]],
-            bins=nbins,
-            color="rebeccapurple",
-            histtype="step",
-            alpha=0.5,
-            density=True,
-            range=(0, 1e5),
-        )
-        # # overplot the sqrt(e) prior
-        # emin = 1 / nbins
-        # x2plot = np.linspace(emin, 1, nbins)
-        # A = 1 / (2 * (1 - np.sqrt(emin)))  # normalization constant
-        # ax[i].plot(x2plot, A / np.sqrt(x2plot), color="rebeccapurple")
-    ax[-1, 0].set_xlabel("eccentricity")
-    ax[-1, 1].set_xlabel("K [m/s]")
-    plt.savefig("plots/rv_tower_plot.png", dpi=250)
-
 
 like = RVPop_Likelihood(
     ecc_posteriors=ecc_posteriors,
-    K_posteriors=K_posteriors,
-    per_posteriors=per_posteriors,
+    sma_posteriors=sma_posteriors,
+    msini_posteriors=msini_posteriors,
     prior=h_prior,
     oneD_completeness=oneD_completeness,
 )

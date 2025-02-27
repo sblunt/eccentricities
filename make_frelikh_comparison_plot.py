@@ -14,20 +14,20 @@ import copy
 from astropy import units as u
 from scipy.stats import gaussian_kde
 
-n_ecc_bins = 30
+n_ecc_bins = 20
 n_sma_bins = 30
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-sma = np.logspace(np.log10(0.02), np.log10(6), n_sma_bins + 1)
-mass = np.array([0, (1 * u.M_jup / u.M_earth).to(""), np.inf])
+sma = np.logspace(np.log10(0.02), np.log10(8), n_sma_bins + 1)
+mass = np.array([0, 1, 15])
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
 injections = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
 
 inj_rec_files = glob.glob("/home/sblunt/CLSI/completeness/recoveries_all/*.csv")
-for f in inj_rec_files[:20]:
+for f in inj_rec_files:
     df = pd.read_csv(f)
 
     df["ecc_completeness_bins"] = np.nan
@@ -44,7 +44,10 @@ for f in inj_rec_files[:20]:
 
     for i in np.arange(len(mass) - 1):
         df["mass_completeness_bins"][
-            ((df.inj_msini.values >= mass[i]) & (df.inj_msini.values < mass[i + 1]))
+            (
+                (df.inj_msini.values * (u.M_earth / u.M_jup).to("") >= mass[i])
+                & (df.inj_msini.values * (u.M_earth / u.M_jup).to("") < mass[i + 1])
+            )
         ] = i
 
     recovered_planets = df[df.recovered.values]
@@ -52,7 +55,11 @@ for f in inj_rec_files[:20]:
 
     for i, row in unrecovered_planets.iterrows():
         # check if injected planet is in range
-        if not np.isnan(row.ecc_completeness_bins + row.sma_completeness_bins):
+        if not np.isnan(
+            row.ecc_completeness_bins
+            + row.sma_completeness_bins
+            + row.mass_completeness_bins
+        ):
             injections[
                 int(row.ecc_completeness_bins),
                 int(row.sma_completeness_bins),
@@ -61,7 +68,11 @@ for f in inj_rec_files[:20]:
 
     for i, row in recovered_planets.iterrows():
         # check if injected planet is in range
-        if not np.isnan(row.ecc_completeness_bins + row.sma_completeness_bins):
+        if not np.isnan(
+            row.ecc_completeness_bins
+            + row.sma_completeness_bins
+            + row.mass_completeness_bins
+        ):
             injections[
                 int(row.ecc_completeness_bins),
                 int(row.sma_completeness_bins),
@@ -103,6 +114,12 @@ filled_in_points = scipy.interpolate.interpn(
 completeness_model = copy.copy(completeness)
 completeness_model[bad_mask] = filled_in_points
 
+# save the completeness model
+np.save("completeness_model/completeness", completeness_model)
+np.save("completeness_model/msini_bins", mass)
+np.save("completeness_model/ecc_bins", ecc)
+np.save("completeness_model/sma_bins", sma)
+
 completeness_model_lowmass = completeness_model[:, :, 0]
 completeness_model_himass = completeness_model[:, :, 1]
 
@@ -119,7 +136,7 @@ ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
 ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("Msini > 1 M$_{{\\mathrm{{J}}}}$")
+ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
 
 ax[0].pcolormesh(sma, ecc, completeness_model_lowmass, shading="auto", vmin=0, vmax=1)
 pc = ax[1].pcolormesh(
@@ -151,9 +168,9 @@ for i, row in legacy_planets.iterrows():
 
     # remove false positives
     if row.status not in ["A", "R", "N"]:
-        all_masses.append((row.mass_med * u.M_earth / u.M_jup).to(""))
+        all_masses.append(row.mass_med)
 
-        if row.mass_med > (mass[1] * u.M_earth / u.M_jup).to(""):
+        if row.mass_med > mass[1]:
             ax_idx = 1
             highmass_eccs.append(row.e_med)
             highmass_smas.append(row.axis_med)
@@ -175,6 +192,7 @@ for i, row in legacy_planets.iterrows():
             color="grey",
         )
 
+plt.tight_layout()
 plt.savefig("plots/frelikh_compare_completeness.png", dpi=250)
 
 """
@@ -215,7 +233,7 @@ ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
 ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("Msini > 1 M$_{{\\mathrm{{J}}}}$")
+ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
 
 for a in ax[:2]:
     a.set_xscale("log")
@@ -230,7 +248,7 @@ ax[1].pcolormesh(
     highmass_kernel_predict.T,
     shading="auto",
     vmin=0,
-    vmax=2.25,  # / completeness_model_himass,
+    vmax=2.25,
 )
 
 lowmass_kernel_predict = np.zeros(
@@ -251,7 +269,7 @@ pc = ax[0].pcolormesh(
     lowmass_kernel_predict.T,
     shading="auto",
     vmin=0,
-    vmax=2.25,  # / completeness_model_lowmass,
+    vmax=2.25,
 )
 
 cbar = fig.colorbar(pc, cax=ax[2])
@@ -262,7 +280,7 @@ for i, row in legacy_planets.iterrows():
     # remove false positives
     if row.status not in ["A", "R", "N"]:
 
-        if row.mass_med > (mass[1] * u.M_earth / u.M_jup).to(""):
+        if row.mass_med > mass[1]:
             ax_idx = 1
             highmass_eccs.append(row.e_med)
             highmass_smas.append(row.axis_med)
@@ -325,7 +343,7 @@ ax1 = fig.add_subplot(gs[0, 1])
 ax = [ax0, ax1]
 
 ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("Msini > 1 M$_{{\\mathrm{{J}}}}$")
+ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
 
 for a in ax[:2]:
     a.set_xscale("log")
@@ -365,7 +383,7 @@ for i, row in legacy_planets.iterrows():
     # remove false positives
     if row.status not in ["A", "R", "N"]:
 
-        if row.mass_med > (mass[1] * u.M_earth / u.M_jup).to(""):
+        if row.mass_med > mass[1]:
             ax_idx = 1
             highmass_eccs.append(row.e_med)
             highmass_smas.append(row.axis_med)
