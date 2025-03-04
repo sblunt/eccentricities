@@ -14,13 +14,13 @@ import copy
 from astropy import units as u
 from scipy.stats import gaussian_kde
 
-n_ecc_bins = 20
-n_sma_bins = 30
+n_ecc_bins = 8
+n_sma_bins = 8
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-sma = np.logspace(np.log10(0.02), np.log10(8), n_sma_bins + 1)
+sma = np.logspace(np.log10(0.02), np.log10(10), n_sma_bins + 1)
 mass = np.array([0, 1, 15])
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
@@ -100,8 +100,10 @@ bad_idx = np.where(bad_mask)
 
 # get (e,sma,msini) coords where we need to interpolate values
 iterp_here = []
-for i in bad_idx[0]:
-    iterp_here.append([i, bad_idx[1][i], bad_idx[2][i]])
+
+for idx, i  in enumerate(bad_idx[0]):
+
+    iterp_here.append([i, bad_idx[1][idx], bad_idx[2][idx]])
 
 filled_in_points = scipy.interpolate.interpn(
     (ecc[:-1], sma[:-1], mass[:-1]),
@@ -116,9 +118,9 @@ completeness_model[bad_mask] = filled_in_points
 
 # save the completeness model
 np.save("completeness_model/completeness", completeness_model)
-np.save("completeness_model/msini_bins", mass)
-np.save("completeness_model/ecc_bins", ecc)
-np.save("completeness_model/sma_bins", sma)
+np.save("completeness_model/{}msini_bins".format(n_mass_bins), mass)
+np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc)
+np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)
 
 completeness_model_lowmass = completeness_model[:, :, 0]
 completeness_model_himass = completeness_model[:, :, 1]
@@ -135,8 +137,10 @@ ax1 = fig.add_subplot(gs[0, 1])
 ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
-ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
+ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[1].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+)
 
 ax[0].pcolormesh(sma, ecc, completeness_model_lowmass, shading="auto", vmin=0, vmax=1)
 pc = ax[1].pcolormesh(
@@ -163,6 +167,8 @@ lowmass_smas = []
 highmass_eccs = []
 highmass_smas = []
 all_masses = []
+lowmass_ecc_errors = []
+highmass_ecc_errors = []
 
 for i, row in legacy_planets.iterrows():
 
@@ -174,11 +180,17 @@ for i, row in legacy_planets.iterrows():
             ax_idx = 1
             highmass_eccs.append(row.e_med)
             highmass_smas.append(row.axis_med)
+            highmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
 
         else:
             ax_idx = 0
             lowmass_eccs.append(row.e_med)
             lowmass_smas.append(row.axis_med)
+            lowmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
 
         ax[ax_idx].scatter(
             [row.axis_med], [row.e_med], color="white", ec="grey", zorder=10
@@ -201,12 +213,14 @@ KDE (NOT COMPLETENESS CORRECTED) PLOT
 
 # train KDE on low-mass data
 dataset = np.vstack((np.log10(lowmass_smas), lowmass_eccs))
-lowmass_kernel = gaussian_kde(dataset)
+
+# TODO: not quite sure how to incorporate the uncertainties into the KDE training
+lowmass_kernel = gaussian_kde(dataset)  # , weights=1 / np.array(lowmass_ecc_errors))
 
 
 # train KDE on high-mass data
 dataset = np.vstack((np.log10(highmass_smas), highmass_eccs))
-highmass_kernel = gaussian_kde(dataset)
+highmass_kernel = gaussian_kde(dataset)  # , weights=1 / np.array(highmass_ecc_errors))
 
 
 sma2plot = np.linspace(np.log10(0.02), np.log10(6), int(1e2))
@@ -232,8 +246,10 @@ ax1 = fig.add_subplot(gs[0, 1])
 ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
-ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
+ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[1].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+)
 
 for a in ax[:2]:
     a.set_xscale("log")
@@ -282,13 +298,19 @@ for i, row in legacy_planets.iterrows():
 
         if row.mass_med > mass[1]:
             ax_idx = 1
-            highmass_eccs.append(row.e_med)
-            highmass_smas.append(row.axis_med)
+            # highmass_eccs.append(row.e_med)
+            # highmass_smas.append(row.axis_med)
+            # highmass_ecc_errors.append(
+            #     np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            # )
 
         else:
             ax_idx = 0
-            lowmass_eccs.append(row.e_med)
-            lowmass_smas.append(row.axis_med)
+            # lowmass_eccs.append(row.e_med)
+            # lowmass_smas.append(row.axis_med)
+            # lowmass_ecc_errors.append(
+            #     np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            # )
 
         ax[ax_idx].scatter(
             [row.axis_med], [row.e_med], color="white", ec="grey", zorder=10
@@ -342,8 +364,10 @@ ax0 = fig.add_subplot(gs[0, 0])
 ax1 = fig.add_subplot(gs[0, 1])
 ax = [ax0, ax1]
 
-ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
+ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[1].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+)
 
 for a in ax[:2]:
     a.set_xscale("log")

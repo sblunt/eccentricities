@@ -13,23 +13,26 @@ to be ingested into epop!
 legacy_planets = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
 )
+
+# NOTE: SAMPLE SELECTION DEFINED HERE
 legacy_planets_inseprange = legacy_planets[
-    (legacy_planets.axis_med > 0.02) & (legacy_planets.axis_med < 6)
+    (legacy_planets.axis_med > 0.1) & (legacy_planets.axis_med < 5)
 ]
 legacy_planets = legacy_planets_inseprange[(legacy_planets.mass_med < 15)]
 
+# this table is based on isoclassify, using Gaia DR2 parallaxes and K band magnitudes when known
+# (Rosenthal+ Table 2)
 stellar_params = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/stellar_parameters.csv", index_col=0
 )
-
-fig, ax = plt.subplots(2, 1, figsize=(15, 5))
-
 # construct the eccentricity posterior for each
 for pl in legacy_planets.iterrows():
     if pl[1].status not in ["A", "R", "N"]:
         print("{} pl {}".format(pl[1].hostname, int(pl[1].pl_index)))
         starname = pl[1].hostname
-        if starname != "213472":  # this one seems to have very badly converged chains
+        if (
+            starname != "213472"
+        ):  # this one was modeled with thejoker (as was 26161, which doesn't seem to be in the results) (I'm not interested in partial orbits here)
 
             plnum = int(pl[1].pl_index)
             chains = pd.read_csv(
@@ -72,48 +75,87 @@ for pl in legacy_planets.iterrows():
             inc = np.arccos(cosi)
             mass_posterior = msini_posterior / np.sin(inc)
 
+            # construct the effective priors on sma and msini
+            period_prior = np.random.uniform(
+                0,
+                365
+                * 6
+                ** (
+                    3 / 2
+                ),  # corresponds to 6 au, which is larger than the sample I'm defining (want use common prior transform for all objects)
+                size=len(mass_posterior),
+            )
+            sma_prior = semi_major_axis(period_prior, Mstar_post)
+            K_prior = np.random.uniform(
+                0,
+                1500,  # corresponds to ~msini=15 Mjup around 1Msol at 0.1 au, which is larger than the sample I'm defining (want use common prior transform for all objects)
+                size=len(mass_posterior),
+            )
+            e_prior = np.random.uniform(0, 1, size=len(mass_posterior))
+            msini_prior = Msini(
+                K_prior, period_prior, Mstar_post, e_prior, Msini_units="jupiter"
+            )
+
             sma_posterior = semi_major_axis(
                 df_synth["per{}".format(plnum)].values, Mstar_post
             )
 
-            rand_samples = np.random.choice(len(sma_posterior), size=1_000)
-
             if pl[1].mass < 1:
                 savedir = "lowmass"
-                ax[0].hist(
-                    msini_posterior[rand_samples],
-                    bins=50,
-                    # density=True,
-                    histtype="step",
-                    alpha=0.2,
-                    color="purple",
-                )
-                # ax[0].hist(
-                #     mass_posterior,
-                #     bins=50,
-                #     density=True,
-                #     alpha=0.2,
-                #     color="purple",
-                #     range=(0, 16),
-                # )
             elif pl[1].mass >= 1:
                 savedir = "highmass"
-                ax[1].hist(
-                    msini_posterior[rand_samples],
-                    bins=50,
-                    # density=True,
-                    histtype="step",
-                    alpha=0.2,
-                    color="purple",
-                )
-                # ax[1].hist(
-                #     mass_posterior,
-                #     bins=50,
-                #     density=True,
-                #     alpha=0.2,
-                #     color="purple",
-                #     range=(0, 16),
-                # )
+
+            fig, ax = plt.subplots(2, 1)
+            ax[0].hist(
+                sma_prior,
+                density=True,
+                bins=50,
+                color="purple",
+                alpha=0.2,
+                label="prior",
+            )
+            ax[0].hist(
+                sma_posterior,
+                bins=50,
+                density=True,
+                histtype="step",
+                alpha=0.2,
+                color="k",
+                label="posterior",
+            )
+
+            ax[1].hist(
+                msini_prior,
+                density=True,
+                bins=50,
+                color="purple",
+                alpha=0.2,
+                label="prior",
+            )
+            ax[1].hist(
+                msini_posterior,
+                bins=50,
+                density=True,
+                histtype="step",
+                alpha=0.2,
+                color="k",
+                label="posterior",
+            )
+            ax[0].legend()
+            ax[0].set_xlabel("sma [au]")
+            ax[1].set_xlabel("msini [Mjup]")
+            ax[0].set_yscale("log")
+            ax[1].set_yscale("log")
+            plt.tight_layout()
+            plt.savefig(
+                "/home/sblunt/eccentricities/lee_posteriors/{}/priors_{}_pl{}.png".format(
+                    savedir, pl[1].hostname, int(pl[1].pl_index)
+                ),
+                dpi=250,
+            )
+            plt.close()
+
+            rand_samples = np.random.choice(len(sma_posterior), size=1_000)
 
             np.savetxt(
                 "/home/sblunt/eccentricities/lee_posteriors/{}/ecc_{}_pl{}.csv".format(
@@ -130,16 +172,23 @@ for pl in legacy_planets.iterrows():
                 delimiter=",",
             )
             np.savetxt(
+                "/home/sblunt/eccentricities/lee_posteriors/{}/msiniPRIOR_{}_pl{}.csv".format(
+                    savedir, pl[1].hostname, int(pl[1].pl_index)
+                ),
+                msini_prior,
+                delimiter=",",
+            )
+            np.savetxt(
                 "/home/sblunt/eccentricities/lee_posteriors/{}/sma_{}_pl{}.csv".format(
                     savedir, pl[1].hostname, int(pl[1].pl_index)
                 ),
                 sma_posterior,
                 delimiter=",",
             )
-for a in ax:
-    a.set_xlabel("Msini [M$_{{\\mathrm{{J}}}}$]")
-    a.set_ylabel("rel. prob.")
-ax[0].set_title("Msini < 1 M$_{{\\mathrm{{J}}}}$")
-ax[1].set_title("1 M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$")
-plt.tight_layout()
-plt.savefig("plots/msini_sample.png", dpi=250)
+            np.savetxt(
+                "/home/sblunt/eccentricities/lee_posteriors/{}/smaPRIOR_{}_pl{}.csv".format(
+                    savedir, pl[1].hostname, int(pl[1].pl_index)
+                ),
+                sma_prior,
+                delimiter=",",
+            )

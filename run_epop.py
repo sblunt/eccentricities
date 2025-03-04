@@ -4,7 +4,6 @@ from scipy.stats import beta
 import pandas as pd
 import glob
 import os
-import matplotlib.pyplot as plt
 
 
 class RVPop_Likelihood(hier_sim.Pop_Likelihood):
@@ -19,7 +18,12 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         mu=0.69,
         std=1.0,
         oneD_completeness=False,
+        min_sma=1,
     ):
+        # min_sma: minimum semimajor axis (au) to consider in the analysis. I set
+        # the completeness values for any posterior samples with smaller smas = 0.
+        # This is basically a hack to play with sample selection.
+
         super().__init__(
             fnames=fnames,
             posteriors=ecc_posteriors,
@@ -83,6 +87,9 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
                 else:
                     completeness_post_i[i] = 0
 
+            # RULES OUT SMAs SMALLER THAN A CERTAIN VALUE (ie. changes sample selection)
+            completeness_post_i[self.sma_posteriors[k] < min_sma] = 0
+
             self.completeness.append(completeness_post_i)
 
     def oneD_completeness(self, e_array, m=-0.325, b=0.348):
@@ -128,11 +135,75 @@ class RVPop_Likelihood(hier_sim.Pop_Likelihood):
         # effectively removes posterior samples that are in parts of parameter
         # space the survey is 0% complete to. I think this makes sense, but think about this a little more.
 
-        log_likelihood = np.sum(np.log(system_sums))
+        log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
 
         log_prior_prob = self.prior.compute_logprob(a, b)
 
         return log_likelihood + log_prior_prob
+
+
+class TwoBetaPop_Likelihood(RVPop_Likelihood):
+    def __init__(
+        self,
+        fnames=None,
+        ecc_posteriors=None,
+        msini_posteriors=None,
+        sma_posteriors=None,
+        prior=None,
+        beta_max=100,
+        mu=0.69,
+        std=1.0,
+        min_sma=1,
+    ):
+        super().__init__(
+            fnames=fnames,
+            ecc_posteriors=ecc_posteriors,
+            msini_posteriors=msini_posteriors,
+            sma_posteriors=sma_posteriors,
+            prior=prior,
+            beta_max=beta_max,
+            mu=mu,
+            std=std,
+            oneD_completeness=False,
+            min_sma=min_sma,
+        )
+
+    def calc_likelihood(self, beta_params):
+        """
+        This method overwrites ePop!'s default, adding the ability to correct
+        for completeness and to fit a pdf that is the sum of two gaussians
+        """
+        a1, b1, a2, b2 = beta_params
+
+        if a1 < 0.01 or b1 < 0.01 or a1 >= self.beta_max or b1 >= self.beta_max:
+            return -np.inf
+        if a2 < 0.01 or b2 < 0.01 or a2 >= self.beta_max or b2 >= self.beta_max:
+            return -np.inf
+
+        system_sums = np.array(
+            [
+                np.sum(
+                    np.nan_to_num(
+                        (
+                            0.5 * beta.pdf(ecc_post, a1, b1)
+                            + 0.5 * beta.pdf(ecc_post, a2, b2)
+                        )
+                        / self.completeness[i],
+                        posinf=0.0,
+                        nan=0.0,
+                    )
+                )
+                / np.shape(ecc_post)[0]
+                for i, ecc_post in enumerate(self.ecc_posteriors)
+            ]
+        )
+
+        log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
+
+        log_prior1_prob = self.prior.compute_logprob(a1, b1)
+        log_prior2_prob = self.prior.compute_logprob(a2, b2)
+
+        return log_likelihood + log_prior1_prob + log_prior2_prob
 
 
 ecc_posteriors = []
@@ -145,6 +216,8 @@ n_samples = int(
 samples = ["highmass"]  # , "highmass"]
 h_prior = None
 oneD_completeness = False
+twocomponent = True
+min_sma = 0.3
 
 for sam in samples:
     for post_path in glob.glob("lee_posteriors/{}/ecc_*.csv".format(sam)):
@@ -170,23 +243,41 @@ for sam in samples:
 
 n_posteriors = len(ecc_posteriors)
 
-like = RVPop_Likelihood(
-    ecc_posteriors=ecc_posteriors,
-    sma_posteriors=sma_posteriors,
-    msini_posteriors=msini_posteriors,
-    prior=h_prior,
-    oneD_completeness=oneD_completeness,
-)
+if twocomponent:
+    like = TwoBetaPop_Likelihood(
+        ecc_posteriors=ecc_posteriors,
+        sma_posteriors=sma_posteriors,
+        msini_posteriors=msini_posteriors,
+        prior=h_prior,
+    )
+else:
+    like = RVPop_Likelihood(
+        ecc_posteriors=ecc_posteriors,
+        sma_posteriors=sma_posteriors,
+        msini_posteriors=msini_posteriors,
+        prior=h_prior,
+        oneD_completeness=oneD_completeness,
+    )
 print("Running MCMC!")
-burn_steps = 500
+burn_steps = 200
 nwalkers = 50
 nsteps = 200
-beta_samples = like.sample(nsteps, burn_steps=burn_steps, nwalkers=nwalkers)
+
+ndim = 2
+if twocomponent:
+    ndim = 4
+
+beta_samples = like.sample(nsteps, burn_steps=burn_steps, nwalkers=nwalkers, ndim=ndim)
 
 savedir = f"plots/{h_prior}Prior"
 
 for sam in samples:
     savedir += f"_{sam}"
+
+savedir += "minsma{}".format(min_sma)
+
+if twocomponent:
+    savedir += "_twocomponent"
 
 if oneD_completeness:
     savedir += "_1Dcompleteness"
