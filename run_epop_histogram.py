@@ -1,32 +1,24 @@
-from ePop import hier_sim
 import numpy as np
 import glob
 import pandas as pd
 import os
+import emcee
 
 
-class HierHistogram(hier_sim.Pop_Likelihood):
+class HierHistogram(object):
 
     def __init__(
         self,
-        fnames=None,
         ecc_posteriors=None,
         msini_posteriors=None,
         sma_posteriors=None,
-        min_sma=1,
         sma_priors=None,
         msini_priors=None,
         n_sma_bins=4,
         n_e_bins=4,
         n_msini_bins=2,
     ):
-        super().__init__(
-            fnames=fnames,
-            ecc_posteriors=ecc_posteriors,
-            msini_posteriors=msini_posteriors,
-            sma_posteriors=sma_posteriors,
-            min_sma=min_sma,
-        )
+        self.ecc_posteriors = ecc_posteriors
         self.msini_posteriors = msini_posteriors
         self.sma_posteriors = sma_posteriors
         self.sma_priors = sma_priors
@@ -90,7 +82,6 @@ class HierHistogram(hier_sim.Pop_Likelihood):
             (self.n_e_bins, self.n_sma_bins, self.n_msini_bins)
         )
 
-        # TODO: reshape histogram_heights into (N_ecc x N_sma x N_msini)
         # NOTE: effective priors radvel applied to individual planet posteriors are computed
         # numerically (except on e, which is uniform) in get_posteriors.py
 
@@ -102,18 +93,50 @@ class HierHistogram(hier_sim.Pop_Likelihood):
                 sma_idx = self.completeness_labels[j, 1, i]
                 msini_idx = self.completeness_labels[j, 2, i]
 
-                system_sums[i] += (
-                    self.completeness[ecc_idx, sma_idx, msini_idx]
-                    * histogram_heights[ecc_idx, sma_idx, msini_idx]
-                    / (self.msini_priors[msini_idx] * self.sma_priors[sma_idx])
-                )
-            system_sums[i] /= self.post_len
+                if not np.isnan(ecc_idx + sma_idx + msini_idx):
 
-        # TODO: add in exponential part of HBM likelihood
+                    ecc_idx = int(ecc_idx)
+                    sma_idx = int(sma_idx)
+                    msini_idx = int(msini_idx)
+
+                    system_sums[i] += (
+                        self.completeness[ecc_idx, sma_idx, msini_idx]
+                        * histogram_heights[ecc_idx, sma_idx, msini_idx]
+                        / (
+                            self.msini_priors[i][msini_idx]
+                            * self.sma_priors[i][sma_idx]
+                        )
+                    )
+            system_sums[i] /= self.post_len
 
         log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
 
+        # add in exponential part of HBM likelihood
+        for i in range(self.n_msini_bins):
+            for j in range(self.n_e_bins):
+                for k in range(self.n_sma_bins):
+                    log_likelihood += -(
+                        self.completeness[j, k, i] * histogram_heights[j, k, i]
+                    )
+
         return log_likelihood
+
+    def sample(self, nsteps, burn_steps=200, nwalkers=100):
+
+        ndim = self.n_e_bins * self.n_sma_bins * self.n_msini_bins
+        p0 = np.random.uniform(0, 1, size=(nwalkers, ndim))
+
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, self.calc_likelihood)
+        state = sampler.run_mcmc(p0, burn_steps, progress=True)
+
+        print("Burn in complete!")
+
+        sampler.reset()
+        sampler.run_mcmc(state, nsteps, progress=True)
+
+        posterior = sampler.get_chain(flat=True)
+
+        return posterior
 
 
 if __name__ == "__main__":
@@ -151,7 +174,7 @@ if __name__ == "__main__":
     for post_path in glob.glob("lee_posteriors/*/smaPRIOR*.csv"):
         sma_prior = pd.read_csv(post_path)
 
-        prior_hist, bins = np.hist(sma_prior, bins=50, density=True)
+        prior_hist, bins = np.histogram(sma_prior, bins=50, density=True)
 
         # figure out which prior bins the posterior samples fall into
         sma_prior_probs = np.zeros(len(sma_post))
@@ -164,7 +187,7 @@ if __name__ == "__main__":
     for post_path in glob.glob("lee_posteriors/*/msiniPRIOR*.csv"):
         msini_prior = pd.read_csv(post_path)
 
-        prior_hist, bins = np.hist(msini_prior, bins=50, density=True)
+        prior_hist, bins = np.histogram(msini_prior, bins=50, density=True)
 
         # figure out which prior bins the posterior samples fall into
         msini_prior_probs = np.zeros(len(msini_post))
@@ -181,9 +204,8 @@ if __name__ == "__main__":
 
     like = HierHistogram(
         ecc_posteriors,
-        msini_posteriors,
-        sma_posteriors,
-        min_sma=min_sma,
+        msini_posteriors=msini_posteriors,
+        sma_posteriors=sma_posteriors,
         msini_priors=msini_priors,
         sma_priors=sma_priors,
         n_sma_bins=n_sma_bins,
@@ -193,14 +215,13 @@ if __name__ == "__main__":
 
     print("Running MCMC!")
     burn_steps = 200
-    nwalkers = 50
+    nwalkers = 100
     nsteps = 200
 
     hbm_samples = like.sample(
         nsteps,
         burn_steps=burn_steps,
         nwalkers=nwalkers,
-        ndim=n_msini_bins * n_sma_bins * n_e_bins,
     )
 
     savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
@@ -211,7 +232,7 @@ if __name__ == "__main__":
         os.mkdir(savedir)
 
     np.savetxt(
-        "{}/epop_samples.csv".format(savedir),
+        "{}/epop_samples_burn{}_total{}.csv".format(savedir, burn_steps, nsteps),
         hbm_samples,
         delimiter=",",
     )

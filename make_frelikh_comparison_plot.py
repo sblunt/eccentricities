@@ -14,14 +14,14 @@ import copy
 from astropy import units as u
 from scipy.stats import gaussian_kde
 
-n_ecc_bins = 8
-n_sma_bins = 8
+n_ecc_bins = 4
+n_sma_bins = 4
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
-
+# NOTE: SAMPLE SELECTION DEFINED HERE (should always be tighter limits than in get_posteriors.py)
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-sma = np.logspace(np.log10(0.02), np.log10(10), n_sma_bins + 1)
-mass = np.array([0, 1, 15])
+sma = np.logspace(np.log10(0.1), np.log10(5), n_sma_bins + 1)
+mass = np.array([0, 1, 13])
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
 injections = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
@@ -101,7 +101,7 @@ bad_idx = np.where(bad_mask)
 # get (e,sma,msini) coords where we need to interpolate values
 iterp_here = []
 
-for idx, i  in enumerate(bad_idx[0]):
+for idx, i in enumerate(bad_idx[0]):
 
     iterp_here.append([i, bad_idx[1][idx], bad_idx[2][idx]])
 
@@ -117,7 +117,10 @@ completeness_model = copy.copy(completeness)
 completeness_model[bad_mask] = filled_in_points
 
 # save the completeness model
-np.save("completeness_model/completeness", completeness_model)
+np.save(
+    "completeness_model/{}{}{}completeness".format(n_mass_bins, n_ecc_bins, n_sma_bins),
+    completeness_model,
+)
 np.save("completeness_model/{}msini_bins".format(n_mass_bins), mass)
 np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc)
 np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)

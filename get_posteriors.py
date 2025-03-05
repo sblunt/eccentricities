@@ -14,9 +14,9 @@ legacy_planets = pd.read_csv(
     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
 )
 
-# NOTE: SAMPLE SELECTION DEFINED HERE
+
 legacy_planets_inseprange = legacy_planets[
-    (legacy_planets.axis_med > 0.1) & (legacy_planets.axis_med < 5)
+    (legacy_planets.axis_med > 0.1) & (legacy_planets.axis_med < 6)
 ]
 legacy_planets = legacy_planets_inseprange[(legacy_planets.mass_med < 15)]
 
@@ -79,10 +79,10 @@ for pl in legacy_planets.iterrows():
             period_prior = np.random.uniform(
                 0,
                 365
-                * 6
+                * 8
                 ** (
                     3 / 2
-                ),  # corresponds to 6 au, which is larger than the sample I'm defining (want use common prior transform for all objects)
+                ),  # corresponds to 8 au, which is larger than the sample I'm defining (want use common prior transform for all objects)
                 size=len(mass_posterior),
             )
             sma_prior = semi_major_axis(period_prior, Mstar_post)
