@@ -2,6 +2,7 @@
 lee_posteriors/*
 brendan_posteriors/*
 plots/*
+OLD/*
 
 # ignore the script to grab Bowler+ 2020 posteriors
 get_files.py

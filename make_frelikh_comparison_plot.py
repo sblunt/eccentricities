@@ -14,14 +14,14 @@ import copy
 from astropy import units as u
 from scipy.stats import gaussian_kde
 
-n_ecc_bins = 4
-n_sma_bins = 4
+n_ecc_bins = 1
+n_sma_bins = 6
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE (should always be tighter limits than in get_posteriors.py)
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-sma = np.logspace(np.log10(0.1), np.log10(5), n_sma_bins + 1)
-mass = np.array([0, 1, 13])
+sma = np.logspace(np.log10(0.1), np.log10(4), n_sma_bins + 1)
+mass = np.array([0.1, 1, 13])  # [Mj]
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
 injections = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
@@ -140,9 +140,15 @@ ax1 = fig.add_subplot(gs[0, 1])
 ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
-ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[0].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[0], mass[1]
+    )
+)
 ax[1].set_title(
-    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[1], mass[2]
+    )
 )
 
 ax[0].pcolormesh(sma, ecc, completeness_model_lowmass, shading="auto", vmin=0, vmax=1)
@@ -249,9 +255,15 @@ ax1 = fig.add_subplot(gs[0, 1])
 ax2 = fig.add_subplot(gs[0, 2])
 ax = [ax0, ax1, ax2]
 
-ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[0].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[0], mass[1]
+    )
+)
 ax[1].set_title(
-    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[1], mass[2]
+    )
 )
 
 for a in ax[:2]:
@@ -367,9 +379,15 @@ ax0 = fig.add_subplot(gs[0, 0])
 ax1 = fig.add_subplot(gs[0, 1])
 ax = [ax0, ax1]
 
-ax[0].set_title("Msini < {} M$_{{\\mathrm{{J}}}}$".format(mass[1]))
+ax[0].set_title(
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[0], mass[1]
+    )
+)
 ax[1].set_title(
-    "{} M$_{{\\mathrm{{J}}}}$ < Msini < 15 M$_{{\\mathrm{{J}}}}$".format(mass[1])
+    "{} M$_{{\\mathrm{{J}}}}$ < Msini < {} M$_{{\\mathrm{{J}}}}$".format(
+        mass[1], mass[2]
+    )
 )
 
 for a in ax[:2]:
