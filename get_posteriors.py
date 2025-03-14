@@ -11,14 +11,8 @@ to be ingested into epop!
 """
 
 legacy_planets = pd.read_csv(
-    "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0
+    "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
 )
-
-
-legacy_planets_inseprange = legacy_planets[
-    (legacy_planets.axis_med > 0.1) & (legacy_planets.axis_med < 6)
-]
-legacy_planets = legacy_planets_inseprange[(legacy_planets.mass_med < 15)]
 
 # this table is based on isoclassify, using Gaia DR2 parallaxes and K band magnitudes when known
 # (Rosenthal+ Table 2)
@@ -29,6 +23,7 @@ stellar_params = pd.read_csv(
 for pl in legacy_planets.iterrows():
     if pl[1].status not in ["A", "R", "N"]:
         print("{} pl {}".format(pl[1].hostname, int(pl[1].pl_index)))
+        print("Copying number {}".format(pl[0]))
         starname = pl[1].hostname
         if (
             starname != "213472"
@@ -105,55 +100,55 @@ for pl in legacy_planets.iterrows():
             elif pl[1].mass >= 1:
                 savedir = "highmass"
 
-            fig, ax = plt.subplots(2, 1)
-            ax[0].hist(
-                sma_prior,
-                density=True,
-                bins=50,
-                color="purple",
-                alpha=0.2,
-                label="prior",
-            )
-            ax[0].hist(
-                sma_posterior,
-                bins=50,
-                density=True,
-                histtype="step",
-                alpha=0.2,
-                color="k",
-                label="posterior",
-            )
+            # fig, ax = plt.subplots(2, 1)
+            # ax[0].hist(
+            #     sma_prior,
+            #     density=True,
+            #     bins=50,
+            #     color="purple",
+            #     alpha=0.2,
+            #     label="prior",
+            # )
+            # ax[0].hist(
+            #     sma_posterior,
+            #     bins=50,
+            #     density=True,
+            #     histtype="step",
+            #     alpha=0.2,
+            #     color="k",
+            #     label="posterior",
+            # )
 
-            ax[1].hist(
-                msini_prior,
-                density=True,
-                bins=50,
-                color="purple",
-                alpha=0.2,
-                label="prior",
-            )
-            ax[1].hist(
-                msini_posterior,
-                bins=50,
-                density=True,
-                histtype="step",
-                alpha=0.2,
-                color="k",
-                label="posterior",
-            )
-            ax[0].legend()
-            ax[0].set_xlabel("sma [au]")
-            ax[1].set_xlabel("msini [Mjup]")
-            ax[0].set_yscale("log")
-            ax[1].set_yscale("log")
-            plt.tight_layout()
-            plt.savefig(
-                "/home/sblunt/eccentricities/lee_posteriors/{}/priors_{}_pl{}.png".format(
-                    savedir, pl[1].hostname, int(pl[1].pl_index)
-                ),
-                dpi=250,
-            )
-            plt.close()
+            # ax[1].hist(
+            #     msini_prior,
+            #     density=True,
+            #     bins=50,
+            #     color="purple",
+            #     alpha=0.2,
+            #     label="prior",
+            # )
+            # ax[1].hist(
+            #     msini_posterior,
+            #     bins=50,
+            #     density=True,
+            #     histtype="step",
+            #     alpha=0.2,
+            #     color="k",
+            #     label="posterior",
+            # )
+            # ax[0].legend()
+            # ax[0].set_xlabel("sma [au]")
+            # ax[1].set_xlabel("msini [Mjup]")
+            # ax[0].set_yscale("log")
+            # ax[1].set_yscale("log")
+            # plt.tight_layout()
+            # plt.savefig(
+            #     "/home/sblunt/eccentricities/lee_posteriors/{}/priors_{}_pl{}.png".format(
+            #         savedir, pl[1].hostname, int(pl[1].pl_index)
+            #     ),
+            #     dpi=250,
+            # )
+            # plt.close()
 
             rand_samples = np.random.choice(len(sma_posterior), size=1_000)
 

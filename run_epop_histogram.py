@@ -115,7 +115,11 @@ class HierHistogram(object):
                     system_sums[i] += (
                         self.completeness[ecc_idx, sma_idx, msini_idx]
                         * histogram_heights[ecc_idx, sma_idx, msini_idx]
-                        / self.post_len  # TODO: removed prior correction for now; add it back in and see how much it changes the result
+                        / self.post_len  # TODO: removed prior correction for now;
+                        # add it back in and see how much it changes the result
+                        # TODO: think about how much the absolute prior val matters (I think I
+                        # just need to resample the samples during the drawing process when prior samples
+                        # are constructed below)
                         # / (
                         #     self.msini_priors[i][msini_idx]
                         #     * self.sma_priors[i][sma_idx]
@@ -127,7 +131,7 @@ class HierHistogram(object):
         # add in exponential part of HBM likelihood
         # this is (negative) the expected number of planets detected by the survey; good sanity check
         norm_constant = -np.sum(self.completeness * histogram_heights * self.bin_widths)
-        print(norm_constant)
+        # print(norm_constant)
         log_likelihood += norm_constant
 
         return log_likelihood
@@ -158,7 +162,7 @@ if __name__ == "__main__":
     msini_priors = []
     sma_priors = []
     n_samples = int(
-        1e2  # TODO: change back to 1e3 for final  if needed
+        1e2  # TODO: change back to 1e3 for final if needed
     )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
     print("reading e posteriors...")
 
