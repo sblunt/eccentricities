@@ -15,7 +15,7 @@ from astropy import units as u
 import os
 
 n_ecc_bins = 4
-n_sma_bins = 3
+n_sma_bins = 2
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE
@@ -151,9 +151,11 @@ ax[1].set_title(
     )
 )
 
-ax[0].pcolormesh(sma, ecc, completeness_model_lowmass, shading="auto", vmin=0, vmax=1)
+ax[0].pcolormesh(
+    sma, ecc, completeness_model_lowmass, shading="auto", vmin=0, vmax=1, cmap="Purples"
+)
 pc = ax[1].pcolormesh(
-    sma, ecc, completeness_model_himass, shading="auto", vmin=0, vmax=1
+    sma, ecc, completeness_model_himass, shading="auto", vmin=0, vmax=1, cmap="Purples"
 )
 cbar = fig.colorbar(pc, cax=ax[2])
 cbar.set_label("completeness")
@@ -210,7 +212,7 @@ for i, row in legacy_planets.iterrows():
             [row.e_med],
             xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
             yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
-            color="grey",
+            color="white",
         )
 
 plt.tight_layout()

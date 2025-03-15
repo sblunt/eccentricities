@@ -218,8 +218,8 @@ if __name__ == "__main__":
         msini_priors.append(msini_prior_probs)
 
     n_msini_bins = 2
-    n_sma_bins = 6
-    n_e_bins = 1
+    n_sma_bins = 2
+    n_e_bins = 4
 
     like = HierHistogram(
         ecc_posteriors,
