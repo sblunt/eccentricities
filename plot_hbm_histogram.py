@@ -121,7 +121,7 @@ plot_probability = True
 
 for i in range(n_msini_bins):
 
-    ax[i].tick_params(top=True, right=True)
+    ax[i].tick_params(top=True, right=True, which="both", direction="in", length=3.5)
 
     dn_dmsini_de_dloga = chains[:, :, :, i]
     dn_de_dloga = dn_dmsini_de_dloga * d_logmsini[i]
@@ -156,6 +156,7 @@ for i in range(n_msini_bins):
             medians,
             shading="auto",
             cmap="Purples",
+            edgecolor="white",
             # vmin=0,
             # vmax=100,
         )
@@ -188,6 +189,7 @@ for i in range(n_msini_bins):
             cmap="Purples",
             vmin=0,
             vmax=30,
+            edgecolor="white",
         )
         for j, a in enumerate(sma_bins[:-1]):
             for k, e in enumerate(ecc_bins[:-1]):
