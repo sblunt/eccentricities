@@ -14,13 +14,13 @@ import copy
 from astropy import units as u
 import os
 
-n_ecc_bins = 4
+n_ecc_bins = 3
 n_sma_bins = 2
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
-sma = np.logspace(np.log10(0.1), np.log10(4.38), n_sma_bins + 1)
+sma = np.logspace(np.log10(0.1), np.log10(5), n_sma_bins + 1)
 mass = np.array([0.09439056, 0.94390556, 18.87811119])  # [Mj]
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))

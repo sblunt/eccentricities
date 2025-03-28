@@ -12,8 +12,6 @@ class HierHistogram(object):
         ecc_posteriors=None,
         msini_posteriors=None,
         sma_posteriors=None,
-        sma_priors=None,
-        msini_priors=None,
         n_sma_bins=4,
         n_e_bins=4,
         n_msini_bins=2,
@@ -21,8 +19,6 @@ class HierHistogram(object):
         self.ecc_posteriors = ecc_posteriors
         self.msini_posteriors = msini_posteriors
         self.sma_posteriors = sma_posteriors
-        self.sma_priors = sma_priors
-        self.msini_priors = msini_priors
 
         # read in 3D completeness model
         self.completeness = np.load(
@@ -97,8 +93,6 @@ class HierHistogram(object):
         histogram_heights = x.reshape(
             (self.n_e_bins, self.n_sma_bins, self.n_msini_bins)
         )
-        # NOTE: effective priors radvel applied to individual planet posteriors are computed
-        # numerically (except on e, which is uniform) in get_posteriors.py
 
         system_sums = np.zeros(self.n_posteriors)
         for i in range(self.n_posteriors):
@@ -115,15 +109,7 @@ class HierHistogram(object):
                     system_sums[i] += (
                         self.completeness[ecc_idx, sma_idx, msini_idx]
                         * histogram_heights[ecc_idx, sma_idx, msini_idx]
-                        / self.post_len  # TODO: removed prior correction for now;
-                        # add it back in and see how much it changes the result
-                        # TODO: think about how much the absolute prior val matters (I think I
-                        # just need to resample the samples during the drawing process when prior samples
-                        # are constructed below)
-                        # / (
-                        #     self.msini_priors[i][msini_idx]
-                        #     * self.sma_priors[i][sma_idx]
-                        # )
+                        / self.post_len
                     )
 
         log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
@@ -159,74 +145,46 @@ if __name__ == "__main__":
     ecc_posteriors = []
     msini_posteriors = []
     sma_posteriors = []
-    msini_priors = []
-    sma_priors = []
-    n_samples = int(
-        1e2  # TODO: change back to 1e3 for final if needed
-    )  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
+    n_samples = 999  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
     print("reading e posteriors...")
 
-    for post_path in glob.glob("lee_posteriors/*/ecc_*.csv"):
+    for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
         ecc_post = pd.read_csv(post_path)
 
         # downsample the posterior to feed into ePop!
-        ecc_post = np.random.choice(ecc_post.values.flatten(), size=n_samples)
+        ecc_post = np.random.choice(
+            ecc_post.values.flatten(), size=n_samples, replace=False
+        )
         ecc_posteriors.append(ecc_post)
 
     print("reading msini posteriors...")
-    for post_path in glob.glob("lee_posteriors/*/msini_*.csv"):
+    for post_path in glob.glob("lee_posteriors/resampled/msini*.csv"):
         msini_post = pd.read_csv(post_path)
 
         # downsample the posterior to feed into ePop!
-        msini_post = np.random.choice(msini_post.values.flatten(), size=n_samples)
+        msini_post = np.random.choice(
+            msini_post.values.flatten(), size=n_samples, replace=False
+        )
         msini_posteriors.append(msini_post)
     print("reading sma posteriors...")
 
-    for post_path in glob.glob("lee_posteriors/*/sma_*.csv"):
+    for post_path in glob.glob("lee_posteriors/resampled/sma*.csv"):
         sma_post = pd.read_csv(post_path)
 
         # downsample the posterior to feed into ePop!
-        sma_post = np.random.choice(sma_post.values.flatten(), size=n_samples)
+        sma_post = np.random.choice(
+            sma_post.values.flatten(), size=n_samples, replace=False
+        )
         sma_posteriors.append(sma_post)
-    print("reading sma priors...")
-
-    for post_path in glob.glob("lee_posteriors/*/smaPRIOR*.csv"):
-        sma_prior = pd.read_csv(post_path)
-
-        prior_hist, bins = np.histogram(sma_prior, bins=50, density=True)
-
-        # figure out which prior bins the posterior samples fall into
-        sma_prior_probs = np.zeros(len(sma_post))
-        for i, a_i in enumerate(sma_post):
-            for j in np.arange(len(bins) - 1):
-                if a_i > bins[j] and a_i <= bins[j + 1]:
-                    sma_prior_probs[i] = prior_hist[j]
-        sma_priors.append(sma_prior_probs)
-    print("reading msini priors...")
-
-    for post_path in glob.glob("lee_posteriors/*/msiniPRIOR*.csv"):
-        msini_prior = pd.read_csv(post_path)
-
-        prior_hist, bins = np.histogram(msini_prior, bins=50, density=True)
-
-        # figure out which prior bins the posterior samples fall into
-        msini_prior_probs = np.zeros(len(msini_post))
-        for i, m_i in enumerate(msini_post):
-            for j in np.arange(len(bins) - 1):
-                if m_i > bins[j] and m_i <= bins[j + 1]:
-                    msini_prior_probs[i] = prior_hist[j]
-        msini_priors.append(msini_prior_probs)
 
     n_msini_bins = 2
     n_sma_bins = 2
-    n_e_bins = 4
+    n_e_bins = 5
 
     like = HierHistogram(
         ecc_posteriors,
         msini_posteriors=msini_posteriors,
         sma_posteriors=sma_posteriors,
-        msini_priors=msini_priors,
-        sma_priors=sma_priors,
         n_sma_bins=n_sma_bins,
         n_e_bins=n_e_bins,
         n_msini_bins=n_msini_bins,
@@ -235,7 +193,7 @@ if __name__ == "__main__":
     print("Running MCMC!")
     burn_steps = 500
     nwalkers = 100
-    nsteps = 200
+    nsteps = 500
 
     hbm_samples = like.sample(
         nsteps,

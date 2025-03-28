@@ -8,8 +8,10 @@ from astropy import units as u, constants as cst
 import scipy
 
 """
-Grabs ecc, msini, and sma posteriors for the planet sample and writes them as csvs 
-to be ingested into epop!
+Grabs ecc, msini, and sma posteriors for the planet sample, uses importance
+resampling to obtain samples the posteriors assuming they were sampled under
+unifom priors on log(sma) and log(msini), and writes them as csvs to be injested 
+into the HBM model.
 """
 
 legacy_planets = pd.read_csv(
@@ -26,126 +28,119 @@ stellar_params = pd.read_csv(
 def compute_importance_probabilities(
     sma_prior,
     msini_prior,
-    sma_limits,
-    msini_limits,
+    Pmax,
+    Mst_median,
     sma_posterior,
     msini_posterior,
-    loguniform=False,
-    saveplot=True,
+    savename=None,
 ):
+    """
+    importance sample the msini prior & posterior down to a uniform prior on log(msini) (which is same as applying 1/x prior)
+    https://stats.stackexchange.com/questions/493868/using-importance-sampling-for-prior-sensitivity-analysis-in-bayesian-modeling
 
-    # importance sample the msini prior & posterior down to a uniform prior on log(msini) (which is same as applying 1/x prior)
-    # https://stats.stackexchange.com/questions/493868/using-importance-sampling-for-prior-sensitivity-analysis-in-bayesian-modeling
+    Pmax: [days]
+    Kmax: [m/s]
+    """
 
-    msini_min, msini_max = (
-        msini_limits  # min & values of the effective prior we're setting
-    )
-    sma_min, sma_max = sma_limits
+    Pmax_yr = Pmax / 365.25
+    msini_max = np.max([np.max(msini_prior), 2 * np.max(msini_posterior)])
+    Kmax_unitless = msini_max / Pmax_yr ** (1 / 3)
 
-    good_prior_indices = (
-        (msini_prior > msini_min)
-        & (msini_prior < msini_max)
-        & (sma_prior > sma_min)
-        & (sma_prior < sma_max)
-    )
+    # some useful constants
+    sma_max = ((Pmax_yr) ** 2 * Mst_median) ** (1 / 3)
 
-    msini_prior_inrange = msini_prior[good_prior_indices]
-    sma_prior_inrange = sma_prior[good_prior_indices]
+    # compute old sma prior probs analytically
+    def calc_sma_prior(x):
 
-    # to estimate the value of the actual prior applied, take a histogram of msini_prior values in the
-    # region of the posterior, then use the heights of the posterior as the probabilities
-    prior_probs, msini_bins, sma_bins = np.histogram2d(
-        msini_prior_inrange, sma_prior_inrange, density=True
-    )
+        norm_const = (2 / 3 * sma_max ** (3 / 2)) ** (-1)
+        return norm_const * x ** (1 / 2)
 
-    # plot this effective prior
-    if saveplot:
-        fig, ax = plt.subplots(3, 1)
+    def expr(x):
+        A = Pmax_yr ** (-2 / 3)
+        term1 = 1 / (2 * np.sqrt(A)) * np.arcsin(np.sqrt(A) * x)
+        term2 = x / 2 * np.sqrt(1 - (A * x**2))
+        return term1 + term2
 
-        ax[0].pcolormesh(msini_bins, sma_bins, prior_probs)
-        ax[0].set_xlabel("Msini")
-        ax[0].set_ylabel("sma [au]")
+    # compute old msini prior probs analytically
+    def calc_msini_prior(msini, msini2plot):
 
-        msini_min = 0
-        msini_max = 1000
-        A = 3 * (msini_max ** (3) - msini_min ** (3)) ** (-1)
+        M = Kmax_unitless * Pmax_yr ** (2 / 3)
+
+        # NOTE: I replaced the commented out portion (the analytical answer) with the nanmax
+        # because sometimes it was failing. Seems like a fine approximation.
+        return (
+            3
+            / M
+            * (
+                -expr(msini / Kmax_unitless)
+                + np.nanmax(expr(msini2plot / Kmax_unitless))
+            )
+        )  # expr(msini_max / Kmax_unitless)
+
+    # overplot old prior probs computed numerically and analytical answer (to check analytical math)
+    if savename is not None:
+        _, ax = plt.subplots(2, 1)
+        ax[0].hist(
+            sma_prior,
+            bins=50,
+            density=True,
+            color="rebeccapurple",
+            alpha=0.5,
+            label="numerically calculated",
+        )
+        sma2plot = np.linspace(0, sma_max, int(1e3))
+        ax[0].plot(
+            sma2plot,
+            calc_sma_prior(sma2plot),
+            color="k",
+            label="analytically calculated",
+        )
+        ax[0].legend()
+        ax[0].set_xlabel("sma [au]")
 
         ax[1].hist(
             msini_prior[msini_prior > 0],
             bins=50,
             density=True,
-            range=(msini_min, msini_max),
-        )  # _inrange)
-        msini2plot = np.linspace(msini_min, msini_max, int(1e3))
-        ax[1].plot(msini2plot, A * msini2plot ** (2))
-
-        sma_max = 3
-        sma_min = 0
-        ax[2].hist(
-            sma_prior, bins=50, density=True, range=(sma_min, sma_max)
-        )  # _inrange)
-
-        sma2plot = np.linspace(sma_min, sma_max, int(1e3))
-        A = 3 / 2 * (sma_max ** (3 / 2) - sma_min ** (3 / 2)) ** (-1)
-        ax[2].plot(sma2plot, A * sma2plot ** (1 / 2))
-        plt.savefig(
-            "/home/sblunt/eccentricities/lee_posteriors/resampled/effective_prior{}_pl{}.png".format(
-                pl[1].hostname, int(pl[1].pl_index)
-            ),
-            dpi=250,
+            color="rebeccapurple",
+            alpha=0.5,
         )
+        msini2plot = np.linspace(0, msini_max, int(1e3))
 
-    # interpolate this effective prior to get effective prior probabilities of the posterior samples
+        # TODO: something is a little off with the math of this prior. Come back to it later.
+        msini_prior_vals = calc_msini_prior(msini2plot, msini2plot)
+        ax[1].plot(msini2plot, msini_prior_vals, color="k")
+        ax[1].set_xlabel("Msini [Mjup]")
 
-    probabilityInterpolater = scipy.interpolate.RegularGridInterpolator(
-        (msini_bins[:-1], sma_bins[:-1]),
-        prior_probs,
-        bounds_error=False,
-        fill_value=0.0,
-    )
+        for a in ax:
+            a.set_ylabel("probability")
+        plt.tight_layout()
+        plt.savefig(savename, dpi=250)
 
-    posterior_pts = np.array([msini_posterior, sma_posterior])
-    old_prior_probs_interpolated = probabilityInterpolater(posterior_pts.T)
+    # compute old prior prob (probability of the two multiplied)
+    log_old_prior_probs = np.log(
+        calc_msini_prior(msini_posterior, msini2plot)
+    ) + np.log(calc_sma_prior(sma_posterior))
 
-    if not loguniform:
-        A_msini = 1 / (msini_max - msini_min)
-        msini_sample_probs = A_msini
-        A_sma = 1 / (sma_max - sma_min)
-        sma_sample_probs = A_sma
+    # compute new sma prior prob (uniform in logspace = 1/x prior pdf)
+    sma_min = np.min(sma_posterior)
+    sma_norm = 1 / (np.log(sma_max) - np.log(sma_min))
+    sma_new_prior_prob = sma_norm / sma_posterior
 
-        new_prior_probs = msini_sample_probs * sma_sample_probs
+    # compute new msini prior prob (loguniform)
+    msini_min = np.min(msini_posterior[msini_posterior > 0])
+    msini_norm = 1 / (np.log(msini_max) - np.log(msini_min))
+    msini_new_prior_prob = msini_norm / msini_posterior
+    log_new_prior_probs = np.log(sma_new_prior_prob) + np.log(msini_new_prior_prob)
 
-    importance_weights = new_prior_probs / old_prior_probs_interpolated
+    # compute total new prior prob by multiplying these two
+    log_importance_weights = log_new_prior_probs - log_old_prior_probs
+    importance_weights = np.exp(log_importance_weights)
     importance_weights[~np.isfinite(importance_weights)] = 0.0
-    importance_probs = importance_weights / np.sum(importance_weights)
+    importance_weights[np.isnan(importance_weights)] = 0.0
+    importance_probs = importance_weights / np.nansum(importance_weights)
 
     return importance_probs
-
-
-# A_msini = np.log(msini_max) - np.log(
-#     msini_min
-# )  # integration constant to make the prior proper
-#
-
-# random_samples = np.random.uniform(0, 1, size=len(mass_posterior))
-# msini_sample_probs = A_msini  # / msini_posterior
-
-# msini_importance_weights = (
-#     msini_sample_probs / msini_prior_probs_interpolated
-# ) / np.sum(msini_sample_probs / msini_prior_probs_interpolated)
-
-# msini_resampled_prior = np.random.choice(
-#     msini_prior, size=int(1e4), p=msini_importance_weights
-# )
-
-# rejection sample the sma prior & posterior down to a uniform prior on log(sma)
-# sma_min = np.min(sma_posterior)  # min & values of the effective prior we're setting
-# sma_max = np.max(sma_posterior)
-# A = 1 / (sma_max - sma_min)  # np.log(sma_max) - np.log(
-# #     sma_min
-# # )  # integration constant to make the prior proper
-
-# sma_sample_probs = A  # / sma_posterior
 
 
 # construct the eccentricity posterior for each
@@ -154,11 +149,16 @@ for pl in legacy_planets.iterrows():
         print("{} pl {}".format(pl[1].hostname, int(pl[1].pl_index)))
         print("Copying number {}".format(pl[0]))
         starname = pl[1].hostname
+        if starname not in [
+            "8375",  # not fixed
+        ]:  # (can use this logic to rerun transfers for only a subset of objects)
+            continue
         if (
-            starname == "112914"  # != "213472" # TODO: fix
+            starname != "213472"
         ):  # this one was modeled with thejoker (as was 26161, which doesn't seem to be in the results) (I'm not interested in partial orbits here)
 
             plnum = int(pl[1].pl_index)
+
             chains = pd.read_csv(
                 "/home/sblunt/eccentricities/lee_posteriors/run_final/{}/chains.csv.tar.bz2".format(
                     starname
@@ -181,6 +181,8 @@ for pl in legacy_planets.iterrows():
             df_synth = myBasis.to_synth(chains)
 
             ecc_posterior = df_synth["e{}".format(plnum)].values
+            per_posterior = df_synth["per{}".format(plnum)].values
+            k_posterior = df_synth["k{}".format(plnum)].values
 
             stellar_props = stellar_params[stellar_params.name == starname]
             Mstar = stellar_props.mass_c.values[0]
@@ -188,34 +190,37 @@ for pl in legacy_planets.iterrows():
             Mstar_prior = np.random.normal(Mstar, Mstar_err, size=len(ecc_posterior))
 
             msini_posterior = Msini(
-                df_synth["k{}".format(plnum)].values,
-                df_synth["per{}".format(plnum)].values,
+                k_posterior,
+                per_posterior,
                 Mstar_prior,
-                df_synth["e{}".format(plnum)].values,
+                ecc_posterior,
                 Msini_units="jupiter",
             )
+            good_indices = np.where(msini_posterior > 0)[0]
+
+            ecc_posterior = ecc_posterior[good_indices]
+            per_posterior = per_posterior[good_indices]
+            Mstar_prior = Mstar_prior[good_indices]
+            k_posterior = k_posterior[good_indices]
+            msini_posterior = msini_posterior[good_indices]
 
             cosi = np.random.uniform(-1, 1, size=len(ecc_posterior))
             inc = np.arccos(cosi)
             mass_posterior = msini_posterior / np.sin(inc)
-            sma_posterior = semi_major_axis(
-                df_synth["per{}".format(plnum)].values, Mstar_prior
-            )
+            sma_posterior = semi_major_axis(per_posterior, Mstar_prior)
 
             # construct the effective priors on sma and msini
-            Pmin = np.min(df_synth["per{}".format(plnum)].values)
-            Pmax = np.max(df_synth["per{}".format(plnum)].values)
+            Pmax = 2 * np.max(per_posterior)
             period_prior = np.random.uniform(
                 0,
-                10 * Pmax,
+                Pmax,
                 size=len(mass_posterior),
             )
             sma_prior = semi_major_axis(period_prior, Mstar_prior)
-            Kmin = np.min(df_synth["k{}".format(plnum)].values)
-            Kmax = np.max(df_synth["k{}".format(plnum)].values)
+            Kmax = 2 * np.max(per_posterior)
             K_prior = np.random.uniform(
                 0,
-                10 * Kmax,
+                Kmax,
                 size=len(mass_posterior),
             )
             e_prior = np.random.uniform(0, 1, size=len(mass_posterior))
@@ -226,11 +231,20 @@ for pl in legacy_planets.iterrows():
             importance_probs = compute_importance_probabilities(
                 sma_prior,
                 msini_prior,
-                (np.min(sma_posterior), np.max(sma_posterior)),
-                (np.min(msini_posterior), np.max(msini_posterior)),
+                Pmax,
+                Mstar,
                 sma_posterior,
                 msini_posterior,
+                savename="/home/sblunt/eccentricities/lee_posteriors/resampled/prior_approx_{}_pl{}.png".format(
+                    pl[1].hostname, int(pl[1].pl_index)
+                ),
             )
+
+            if np.sum(np.isnan(importance_probs)) > 0:
+                print(
+                    f"warning: importance probabilities contained {np.sum(np.isnan(importance_probs))} nans"
+                )
+            importance_probs[np.isnan(importance_probs)] = 0
 
             # use importance weights to resample whole 3d posterior
             resampled_indices = np.random.choice(
@@ -262,14 +276,6 @@ for pl in legacy_planets.iterrows():
                 label=f"original posterior ({len(mass_posterior)} samples)",
             )
 
-            # ax[1].hist(
-            #     msini_prior,
-            #     density=True,
-            #     bins=50,
-            #     color="purple",
-            #     alpha=0.2,
-            #     label="prior",
-            # )
             ax[1].hist(
                 msini_posterior,
                 bins=50,
@@ -314,8 +320,7 @@ for pl in legacy_planets.iterrows():
             ax[0].set_xlabel("sma [au]")
             ax[1].set_xlabel("msini [M$_{{\\mathrm{{Jup}}}}$]")
             ax[2].set_xlabel("ecc")
-            # ax[0].set_yscale("log")
-            # ax[1].set_yscale("log")
+
             plt.tight_layout()
             plt.savefig(
                 "/home/sblunt/eccentricities/lee_posteriors/resampled/priors_{}_pl{}.png".format(
@@ -325,20 +330,6 @@ for pl in legacy_planets.iterrows():
             )
             plt.close()
 
-            # np.savetxt(
-            #     "/home/sblunt/eccentricities/lee_posteriors/{}/ecc_{}_pl{}.csv".format(
-            #         savedir, pl[1].hostname, int(pl[1].pl_index)
-            #     ),
-            #     ecc_posterior,
-            #     delimiter=",",
-            # )
-            # np.savetxt(
-            #     "/home/sblunt/eccentricities/lee_posteriors/{}/msini_{}_pl{}.csv".format(
-            #         savedir, pl[1].hostname, int(pl[1].pl_index)
-            #     ),
-            #     msini_posterior,
-            #     delimiter=",",
-            # )
             np.savetxt(
                 "/home/sblunt/eccentricities/lee_posteriors/resampled/msiniRESAMPLED_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
@@ -346,13 +337,7 @@ for pl in legacy_planets.iterrows():
                 msini_resampled_posterior,
                 delimiter=",",
             )
-            # np.savetxt(
-            #     "/home/sblunt/eccentricities/lee_posteriors/{}/sma_{}_pl{}.csv".format(
-            #         savedir, pl[1].hostname, int(pl[1].pl_index)
-            #     ),
-            #     sma_posterior,
-            #     delimiter=",",
-            # )
+
             np.savetxt(
                 "/home/sblunt/eccentricities/lee_posteriors/resampled/smaRESAMPLED_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)

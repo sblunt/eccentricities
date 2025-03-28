@@ -163,23 +163,35 @@ plt.savefig("plots/sanity_checks/Pe.png", dpi=250)
 
 """
 Checks how uniformly sampling in P, e, and K translates to P^(1/3)sqrt(1-e^2)K
+and to Msini (which is the same expression as above, with K in multiples of 
+28.4329 m/s (Jupiter around Earth), P in years, and all multiplied by Mtot^(2/3), 
+with Mtot in Msol)
 """
 
 
 n_samples = int(1e5)
-Pmax = 30
-Kmax = 100
-P = np.random.uniform(0, Pmax, size=n_samples)
-e = np.random.uniform(0, 1, size=n_samples)
+Pmax = 4  # [units of yr]
+Kmax_ms = 10_000  # [m/s]
+st_mass = 0.7
+Kmax = Kmax_ms / 28.4329 * st_mass ** (2 / 3)
+print(Kmax)
+# Kmax = 100  # [units of Jupiter semiamplitude times (stellar mass)^(2/3) (i.e. 1 means Mst^(2/3) * 28.4329 m/s)]
+P = np.random.uniform(0, Pmax, size=n_samples)  # [yr]
+e = np.random.uniform(0, 1, size=n_samples)  # []
 K = np.random.uniform(0, Kmax, size=n_samples)
 
 plt.figure()
 plt.hist(K * np.sqrt(1 - e**2) * P ** (1 / 3), bins=50, density=True)
 
 plotme = np.linspace(0, Pmax ** (1 / 3) * Kmax, int(1e3))
+print(np.max(plotme))
+
 
 M = Kmax * Pmax ** (2 / 3)
 A = Pmax ** (-2 / 3)
+
+print(M)
+print(A)
 
 
 def expr(x, A):
@@ -189,6 +201,8 @@ def expr(x, A):
 
 
 pdf = 3 / M * (expr(Pmax ** (1 / 3), A) - expr(plotme / Kmax, A))
+
+print(plotme)
 
 plt.plot(plotme, pdf)
 plt.savefig("plots/sanity_checks/PeK.png", dpi=250)
