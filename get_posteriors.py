@@ -110,7 +110,7 @@ def compute_importance_probabilities(
         # TODO: something is a little off with the math of this prior. Come back to it later.
         msini_prior_vals = calc_msini_prior(msini2plot, msini2plot)
         ax[1].plot(msini2plot, msini_prior_vals, color="k")
-        ax[1].set_xlabel("Msini [Mjup]")
+        ax[1].set_xlabel("Msini [Mearth]")
 
         for a in ax:
             a.set_ylabel("probability")
@@ -149,10 +149,10 @@ for pl in legacy_planets.iterrows():
         print("{} pl {}".format(pl[1].hostname, int(pl[1].pl_index)))
         print("Copying number {}".format(pl[0]))
         starname = pl[1].hostname
-        if starname not in [
-            "8375",  # not fixed
-        ]:  # (can use this logic to rerun transfers for only a subset of objects)
-            continue
+        # if starname not in [
+        #     "8375",  # not fixed
+        # ]:  # (can use this logic to rerun transfers for only a subset of objects)
+        #     continue
         if (
             starname != "213472"
         ):  # this one was modeled with thejoker (as was 26161, which doesn't seem to be in the results) (I'm not interested in partial orbits here)
@@ -194,7 +194,7 @@ for pl in legacy_planets.iterrows():
                 per_posterior,
                 Mstar_prior,
                 ecc_posterior,
-                Msini_units="jupiter",
+                Msini_units="earth",
             )
             good_indices = np.where(msini_posterior > 0)[0]
 
@@ -225,7 +225,7 @@ for pl in legacy_planets.iterrows():
             )
             e_prior = np.random.uniform(0, 1, size=len(mass_posterior))
             msini_prior = Msini(
-                K_prior, period_prior, Mstar_prior, e_prior, Msini_units="jupiter"
+                K_prior, period_prior, Mstar_prior, e_prior, Msini_units="earth"
             )
 
             importance_probs = compute_importance_probabilities(
@@ -318,7 +318,7 @@ for pl in legacy_planets.iterrows():
 
             ax[0].legend()
             ax[0].set_xlabel("sma [au]")
-            ax[1].set_xlabel("msini [M$_{{\\mathrm{{Jup}}}}$]")
+            ax[1].set_xlabel("msini [Mearth]")
             ax[2].set_xlabel("ecc")
 
             plt.tight_layout()
@@ -331,7 +331,7 @@ for pl in legacy_planets.iterrows():
             plt.close()
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/msiniRESAMPLED_{}_pl{}.csv".format(
+                "/home/sblunt/eccentricities/lee_posteriors/resampled/msini_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 msini_resampled_posterior,
@@ -339,7 +339,7 @@ for pl in legacy_planets.iterrows():
             )
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/smaRESAMPLED_{}_pl{}.csv".format(
+                "/home/sblunt/eccentricities/lee_posteriors/resampled/sma_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 sma_resampled_posterior,
@@ -350,5 +350,28 @@ for pl in legacy_planets.iterrows():
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 ecc_resampled_posterior,
+                delimiter=",",
+            )
+
+            np.savetxt(
+                "/home/sblunt/eccentricities/lee_posteriors/original/msini_{}_pl{}.csv".format(
+                    pl[1].hostname, int(pl[1].pl_index)
+                ),
+                msini_posterior,
+                delimiter=",",
+            )
+
+            np.savetxt(
+                "/home/sblunt/eccentricities/lee_posteriors/original/sma_{}_pl{}.csv".format(
+                    pl[1].hostname, int(pl[1].pl_index)
+                ),
+                sma_posterior,
+                delimiter=",",
+            )
+            np.savetxt(
+                "/home/sblunt/eccentricities/lee_posteriors/original/ecc_{}_pl{}.csv".format(
+                    pl[1].hostname, int(pl[1].pl_index)
+                ),
+                ecc_posterior,
                 delimiter=",",
             )

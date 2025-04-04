@@ -146,40 +146,32 @@ if __name__ == "__main__":
     msini_posteriors = []
     sma_posteriors = []
     n_samples = 999  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
-    print("reading e posteriors...")
 
     for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
-        ecc_post = pd.read_csv(post_path)
 
-        # downsample the posterior to feed into ePop!
-        ecc_post = np.random.choice(
-            ecc_post.values.flatten(), size=n_samples, replace=False
-        )
-        ecc_posteriors.append(ecc_post)
+        ecc_post = pd.read_csv(post_path).values.flatten()
+        post_len = len(ecc_post)
 
-    print("reading msini posteriors...")
-    for post_path in glob.glob("lee_posteriors/resampled/msini*.csv"):
-        msini_post = pd.read_csv(post_path)
+        st_name = post_path.split("/")[-1].split("_")[1]
+        pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0]
 
-        # downsample the posterior to feed into ePop!
-        msini_post = np.random.choice(
-            msini_post.values.flatten(), size=n_samples, replace=False
-        )
-        msini_posteriors.append(msini_post)
-    print("reading sma posteriors...")
+        msini_post = pd.read_csv(
+            f"lee_posteriors/resampled/msini_{st_name}_{pl_num}.csv"
+        ).values.flatten()
+        sma_post = pd.read_csv(
+            f"lee_posteriors/resampled/sma_{st_name}_{pl_num}.csv"
+        ).values.flatten()
 
-    for post_path in glob.glob("lee_posteriors/resampled/sma*.csv"):
-        sma_post = pd.read_csv(post_path)
+        # downsample the posteriors
+        idxs = np.random.choice(np.arange(post_len), size=n_samples, replace=False)
 
-        # downsample the posterior to feed into ePop!
-        sma_post = np.random.choice(
-            sma_post.values.flatten(), size=n_samples, replace=False
-        )
-        sma_posteriors.append(sma_post)
+        ecc_posteriors.append(ecc_post[idxs])
+        msini_posteriors.append(msini_post[idxs])
+        sma_posteriors.append(sma_post[idxs])
 
     n_msini_bins = 2
-    n_sma_bins = 2
-    n_e_bins = 5
+    n_sma_bins = 6
+    n_e_bins = 1
 
     like = HierHistogram(
         ecc_posteriors,

@@ -6,13 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import corner
 import pandas as pd
+from astropy import units as u, constants as cst
+import glob
+
+# TODO: change planets to be plotted from resampled posteriors, not published list
 
 # read in MCMC samples
 n_msini_bins = 2
-n_sma_bins = 2
-n_e_bins = 4
+n_sma_bins = 6
+n_e_bins = 1
 n_burn = 500  # number of burn-in steps I ran for the actual MCMC
-n_total = 200
+n_total = 500
 nwalkers = 100
 
 ndim = n_msini_bins * n_sma_bins * n_e_bins
@@ -80,42 +84,83 @@ for a in ax[:-1]:
     a.set_xlabel("sma [au]")
 ax[0].set_ylabel("eccentricity")
 ax[0].set_title(
-    "{:.2f} M$_{{\\mathrm{{J}}}}$ < Msini < {:.2f} M$_{{\\mathrm{{J}}}}$".format(
+    "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
         msini_bins[0], msini_bins[1]
     )
 )
 ax[1].set_title(
-    "{:.2f} M$_{{\\mathrm{{J}}}}$ < Msini < {:.2f} M$_{{\\mathrm{{J}}}}$".format(
+    "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
         msini_bins[1], msini_bins[2]
     )
 )
 
+for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
+
+    ecc_post = pd.read_csv(post_path).values.flatten()
+    post_len = len(ecc_post)
+
+    st_name = post_path.split("/")[-1].split("_")[1]
+    pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0]
+
+    msini_post = pd.read_csv(
+        f"lee_posteriors/resampled/msiniRESAMPLED_{st_name}_{pl_num}.csv"
+    ).values.flatten()
+    sma_post = pd.read_csv(
+        f"lee_posteriors/resampled/smaRESAMPLED_{st_name}_{pl_num}.csv"
+    ).values.flatten()
+
+    if np.median(msini_post) > msini_bins[1]:
+        ax_idx = 1
+    else:
+        ax_idx = 0
+
+    ax[ax_idx].scatter(
+        [np.median(sma_post)],
+        [np.median(ecc_post)],
+        color="white",
+        ec="grey",
+        zorder=10,
+    )
+
+    sma_cis = np.quantile(sma_post, [0.16, 0.5, 0.84])
+    ecc_cis = np.quantile(ecc_post, [0.16, 0.5, 0.84])
+
+    ax[ax_idx].errorbar(
+        [sma_cis[1]],
+        [ecc_cis[1]],
+        xerr=([sma_cis[1] - sma_cis[0]], [sma_cis[2] - sma_cis[1]]),
+        yerr=([ecc_cis[1] - ecc_cis[0]], [ecc_cis[2] - ecc_cis[1]]),
+        color="white",
+    )
+
+
 # overplot the planets
-legacy_planets = pd.read_csv(
-    "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
-)
-for i, row in legacy_planets.iterrows():
+# legacy_planets = pd.read_csv(
+#     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
+# )
+# for i, row in legacy_planets.iterrows():
 
-    # remove false positives
-    if row.status not in ["A", "R", "N"]:
+#     # remove false positives
+#     if row.status not in ["A", "R", "N"]:
 
-        if row.mass_med > msini_bins[1]:
-            ax_idx = 1
+#         if (row.mass_med * (u.M_jup / u.M_earth)).to("") > msini_bins[1]:
+#             ax_idx = 1
 
-        else:
-            ax_idx = 0
+#         else:
+#             ax_idx = 0
 
-        ax[ax_idx].scatter(
-            [row.axis_med], [row.e_med], color="white", ec="grey", zorder=10
-        )
+#         ax[ax_idx].scatter(
+#             [row.axis_med], [row.e_med], color="white", ec="grey", zorder=10
+#         )
 
-        ax[ax_idx].errorbar(
-            [row.axis_med],
-            [row.e_med],
-            xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
-            yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
-            color="white",
-        )
+#         ax[ax_idx].errorbar(
+#             [row.axis_med],
+#             [row.e_med],
+#             xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
+#             yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
+#             color="white",
+#         )
+
 
 plot_probability = True
 
@@ -304,9 +349,13 @@ for i in range(n_msini_bins):
 
         label = None
         if j == 0 and i == 0:
-            label = "{:.2f} Mj < Msini < {:.2f} Mj".format(msini_bins[0], msini_bins[1])
+            label = "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
+                msini_bins[0], msini_bins[1]
+            )
         elif j == 0 and i == 1:
-            label = "{:.2f} Mj < Msini < {:.2f} Mj".format(msini_bins[1], msini_bins[2])
+            label = "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
+                msini_bins[1], msini_bins[2]
+            )
 
         # each of these is dN/dMsini * de * dloga
         for k in range(n2plot):
@@ -339,7 +388,7 @@ plt.savefig(
 corner plot
 """
 
-# chains = chains.reshape((-1, ndim))
+chains = chains.reshape((-1, ndim))
 
-# corner.corner(chains)
-# plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
+corner.corner(chains)
+plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
