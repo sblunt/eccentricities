@@ -9,14 +9,12 @@ import pandas as pd
 from astropy import units as u, constants as cst
 import glob
 
-# TODO: change planets to be plotted from resampled posteriors, not published list
-
 # read in MCMC samples
 n_msini_bins = 2
 n_sma_bins = 6
 n_e_bins = 1
-n_burn = 500  # number of burn-in steps I ran for the actual MCMC
-n_total = 500
+n_burn = 1  # 500  # number of burn-in steps I ran for the actual MCMC
+n_total = 200  # 500
 nwalkers = 100
 
 ndim = n_msini_bins * n_sma_bins * n_e_bins
@@ -26,7 +24,7 @@ savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 nstars_cps = 719  # total number of stars in the sample
 
 # choose fraction of burn-in steps to chop off for plots
-burnin = 0
+burnin = 0.75
 
 posteriors = np.loadtxt(
     f"{savedir}/epop_samples_burn{n_burn}_total{n_total}.csv", delimiter=","
@@ -103,10 +101,10 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
     pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0]
 
     msini_post = pd.read_csv(
-        f"lee_posteriors/resampled/msiniRESAMPLED_{st_name}_{pl_num}.csv"
+        f"lee_posteriors/resampled/msini_{st_name}_{pl_num}.csv"
     ).values.flatten()
     sma_post = pd.read_csv(
-        f"lee_posteriors/resampled/smaRESAMPLED_{st_name}_{pl_num}.csv"
+        f"lee_posteriors/resampled/sma_{st_name}_{pl_num}.csv"
     ).values.flatten()
 
     if np.median(msini_post) > msini_bins[1]:
@@ -132,35 +130,6 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
         yerr=([ecc_cis[1] - ecc_cis[0]], [ecc_cis[2] - ecc_cis[1]]),
         color="white",
     )
-
-
-# overplot the planets
-# legacy_planets = pd.read_csv(
-#     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
-# )
-# for i, row in legacy_planets.iterrows():
-
-#     # remove false positives
-#     if row.status not in ["A", "R", "N"]:
-
-#         if (row.mass_med * (u.M_jup / u.M_earth)).to("") > msini_bins[1]:
-#             ax_idx = 1
-
-#         else:
-#             ax_idx = 0
-
-#         ax[ax_idx].scatter(
-#             [row.axis_med], [row.e_med], color="white", ec="grey", zorder=10
-#         )
-
-#         ax[ax_idx].errorbar(
-#             [row.axis_med],
-#             [row.e_med],
-#             xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
-#             yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
-#             color="white",
-#         )
-
 
 plot_probability = True
 
@@ -276,23 +245,23 @@ colors = ["blue", "green"]
 fmts = ["o", "^"]
 for i in range(n_msini_bins):
 
-    # for each posterior sample, add up delta_e * delta_msini * dN/de * d(loga) * d(msini) for each e bin
     dn_dmsini_de_dloga = chains[:, :, :, i]  # (n_steps, n_e, n_sma)
+
     dn_de_dloga = dn_dmsini_de_dloga * d_logmsini[i]
     d_occurrence_de_dloga = dn_de_dloga / nstars_cps * 100
 
     d_occurrence_dloga = np.sum(d_occurrence_de_dloga * d_ecc, axis=1)
+
     hist = []
 
     for j, a in enumerate(sma_bins[:-1]):
 
         label = None
         if j == 0 and i == 0:
-            label = "{:.2f} Mj < Msini < {:.2f} Mj".format(msini_bins[0], msini_bins[1])
+            label = "{} Mearth < Msini < {} Mearth".format(msini_bins[0], msini_bins[1])
         elif j == 0 and i == 1:
-            label = "{:.2f} Mj < Msini < {:.2f} Mj".format(msini_bins[1], msini_bins[2])
+            label = "{} Mearth < Msini < {} Mearth".format(msini_bins[1], msini_bins[2])
 
-        # each of these is dN/dMsini * de * dloga
         for k in range(n2plot):
             ax.plot(
                 [sma_bins[j], sma_bins[j + 1]],

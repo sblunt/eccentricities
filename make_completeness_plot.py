@@ -172,7 +172,8 @@ highmass_smas = []
 lowmass_ecc_errors = []
 highmass_ecc_errors = []
 
-for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
+origin = "resampled"
+for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
 
     ecc_post = pd.read_csv(post_path).values.flatten()
     post_len = len(ecc_post)
@@ -181,10 +182,10 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
     pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0]
 
     msini_post = pd.read_csv(
-        f"lee_posteriors/resampled/msini_{st_name}_{pl_num}.csv"
+        f"lee_posteriors/{origin}/msini_{st_name}_{pl_num}.csv"
     ).values.flatten()
     sma_post = pd.read_csv(
-        f"lee_posteriors/resampled/sma_{st_name}_{pl_num}.csv"
+        f"lee_posteriors/{origin}/sma_{st_name}_{pl_num}.csv"
     ).values.flatten()
 
     if np.median(msini_post) > mass[1]:
@@ -209,7 +210,45 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
         xerr=([sma_cis[1] - sma_cis[0]], [sma_cis[2] - sma_cis[1]]),
         yerr=([ecc_cis[1] - ecc_cis[0]], [ecc_cis[2] - ecc_cis[1]]),
         color="white",
+        alpha=0.5,
+        lw=2,
     )
+
+# overplot the published limits from Lee's paper
+legacy_planets = pd.read_csv(
+    "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
+)
+for i, row in legacy_planets.iterrows():
+
+    # remove false positives
+    if row.status not in ["A", "R", "N"]:
+
+        if (row.mass_med * u.M_jup / u.M_earth).to("") > mass[1]:
+            ax_idx = 1
+            highmass_eccs.append(row.e_med)
+            highmass_smas.append(row.axis_med)
+            highmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
+
+        else:
+            ax_idx = 0
+            lowmass_eccs.append(row.e_med)
+            lowmass_smas.append(row.axis_med)
+            lowmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
+
+        ax[ax_idx].errorbar(
+            [row.axis_med],
+            [row.e_med],
+            xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
+            yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
+            color="k",
+            lw=0.5,
+            alpha=1,
+        )
+
 plt.tight_layout()
 
 savedir = f"plots/{n_mass_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
