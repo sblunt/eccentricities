@@ -11,10 +11,10 @@ import glob
 
 # read in MCMC samples
 n_msini_bins = 2
-n_sma_bins = 6
-n_e_bins = 1
-n_burn = 1  # 500  # number of burn-in steps I ran for the actual MCMC
-n_total = 200  # 500
+n_sma_bins = 2
+n_e_bins = 5
+n_burn = 500  # number of burn-in steps I ran for the actual MCMC
+n_total = 500
 nwalkers = 100
 
 ndim = n_msini_bins * n_sma_bins * n_e_bins
@@ -24,7 +24,7 @@ savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 nstars_cps = 719  # total number of stars in the sample
 
 # choose fraction of burn-in steps to chop off for plots
-burnin = 0.75
+burnin = 0  # 0.75
 
 posteriors = np.loadtxt(
     f"{savedir}/epop_samples_burn{n_burn}_total{n_total}.csv", delimiter=","
@@ -202,7 +202,7 @@ for i in range(n_msini_bins):
             shading="auto",
             cmap="Purples",
             vmin=0,
-            vmax=30,
+            vmax=25,
             edgecolor="white",
         )
         for j, a in enumerate(sma_bins[:-1]):
