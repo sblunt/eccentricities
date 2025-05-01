@@ -14,15 +14,22 @@ import copy
 import astropy.units as u, astropy.constants as cst
 import os
 
-n_ecc_bins = 1
-n_sma_bins = 6
+n_ecc_bins = 5
+n_sma_bins = 2
 n_mass_bins = 2  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
 
+highsmaonly = False
+
 # these sma/msini limits overlap with BJ's bins
 sma = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
+
+if highsmaonly:
+    sma = sma[1:]
+    n_sma_bins -= 1
+
 mass = np.array([30, 300, 6000])  # [Mearth]
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
@@ -117,12 +124,21 @@ completeness_model[bad_mask] = filled_in_points
 
 # save the completeness model
 np.save(
-    "completeness_model/{}{}{}completeness".format(n_mass_bins, n_ecc_bins, n_sma_bins),
+    "completeness_model/{}{}{}completeness_highsmaonly{}".format(
+        n_mass_bins, n_ecc_bins, n_sma_bins, highsmaonly
+    ),
     completeness_model,
 )
-np.save("completeness_model/{}msini_bins".format(n_mass_bins), mass)
-np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc)
-np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)
+np.save(
+    "completeness_model/{}msini_bins_highsmaonly{}".format(n_mass_bins, highsmaonly),
+    mass,
+)
+np.save(
+    "completeness_model/{}ecc_bins_highsmaonly{}".format(n_ecc_bins, highsmaonly), ecc
+)
+np.save(
+    "completeness_model/{}sma_bins_highsmaonly{}".format(n_sma_bins, highsmaonly), sma
+)
 
 completeness_model_lowmass = completeness_model[:, :, 0]
 completeness_model_himass = completeness_model[:, :, 1]
@@ -239,19 +255,21 @@ for i, row in legacy_planets.iterrows():
                 np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
             )
 
-        ax[ax_idx].errorbar(
-            [row.axis_med],
-            [row.e_med],
-            xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
-            yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
-            color="k",
-            lw=0.5,
-            alpha=1,
-        )
+        # ax[ax_idx].errorbar(
+        #     [row.axis_med],
+        #     [row.e_med],
+        #     xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
+        #     yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
+        #     color="k",
+        #     lw=0.5,
+        #     alpha=1,
+        # )
 
 plt.tight_layout()
 
 savedir = f"plots/{n_mass_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
+if highsmaonly:
+    savedir += "_parab"
 
 if not os.path.exists(savedir):
     os.mkdir(savedir)

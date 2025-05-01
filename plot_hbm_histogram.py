@@ -12,7 +12,7 @@ import glob
 # read in MCMC samples
 n_msini_bins = 2
 n_sma_bins = 2
-n_e_bins = 5
+n_e_bins = 3
 n_burn = 500  # number of burn-in steps I ran for the actual MCMC
 n_total = 500
 nwalkers = 100
@@ -82,13 +82,13 @@ for a in ax[:-1]:
     a.set_xlabel("sma [au]")
 ax[0].set_ylabel("eccentricity")
 ax[0].set_title(
-    "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
-        msini_bins[0], msini_bins[1]
+    "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+        int(msini_bins[0]), int(msini_bins[1])
     )
 )
 ax[1].set_title(
-    "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
-        msini_bins[1], msini_bins[2]
+    "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+        int(msini_bins[1]), int(msini_bins[2])
     )
 )
 
@@ -258,9 +258,13 @@ for i in range(n_msini_bins):
 
         label = None
         if j == 0 and i == 0:
-            label = "{} Mearth < Msini < {} Mearth".format(msini_bins[0], msini_bins[1])
+            label = "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+                int(msini_bins[0]), int(msini_bins[1])
+            )
         elif j == 0 and i == 1:
-            label = "{} Mearth < Msini < {} Mearth".format(msini_bins[1], msini_bins[2])
+            label = "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+                int(msini_bins[1]), int(msini_bins[2])
+            )
 
         for k in range(n2plot):
             ax.plot(
@@ -318,12 +322,12 @@ for i in range(n_msini_bins):
 
         label = None
         if j == 0 and i == 0:
-            label = "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
-                msini_bins[0], msini_bins[1]
+            label = "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+                int(msini_bins[0]), int(msini_bins[1])
             )
         elif j == 0 and i == 1:
-            label = "{:.2f} M$_{{\\oplus}}$ < Msini < {:.2f} M$_{{\\oplus}}$".format(
-                msini_bins[1], msini_bins[2]
+            label = "{} M$_{{\\oplus}}$ < M < {} M$_{{\\oplus}}$".format(
+                int(msini_bins[1]), int(msini_bins[2])
             )
 
         # each of these is dN/dMsini * de * dloga
@@ -353,11 +357,32 @@ plt.savefig(
     f"{savedir}/ecc_marginalized_samples_burn{n_burn}_total{n_total}.png", dpi=250
 )
 
+
+"""
+compute significance of peak
+"""
+
+sma_bin_idx = 1
+msini_bin_idx = 1
+
+
+ecc0_bin = chains[:, 0, sma_bin_idx, msini_bin_idx]
+ecc1_bin = chains[:, 1, sma_bin_idx, msini_bin_idx]
+ecc2_bin = chains[:, 2, sma_bin_idx, msini_bin_idx]
+ecc3_bin = chains[:, 3, sma_bin_idx, msini_bin_idx]
+ecc4_bin = chains[:, 4, sma_bin_idx, msini_bin_idx]
+
+prob_e1_lt_e0 = np.where(ecc1_bin <= ecc0_bin)[0]
+prob_e1_lt_e0_and_gt_e2 = np.where((ecc1_bin <= ecc0_bin) & (ecc1_bin >= ecc2_bin))[0]
+# prob_e1_lt_both =
+print(len(prob_e1_lt_e0) / len(ecc0_bin))
+print(len(prob_e1_lt_e0_and_gt_e2) / len(ecc0_bin))
+
 """
 corner plot
 """
 
-chains = chains.reshape((-1, ndim))
+# chains = chains.reshape((-1, ndim))
 
-corner.corner(chains)
-plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
+# corner.corner(chains)
+# plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
