@@ -190,9 +190,9 @@ if __name__ == "__main__":
         msini_posteriors.append(msini_post[idxs])
         sma_posteriors.append(sma_post[idxs])
 
-    n_msini_bins = 2
+    n_msini_bins = 3
     n_sma_bins = 2
-    n_e_bins = 3
+    n_e_bins = 5
 
     like = HierHistogram(
         ecc_posteriors,
