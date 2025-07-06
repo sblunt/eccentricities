@@ -3,23 +3,30 @@ import glob
 import pandas as pd
 import os
 import emcee
+from scipy.stats import norm
+from scipy.special import erf
+import time
 
-
-class HierHistogram(object):
+class HierGaussian(object):
 
     def __init__(
         self,
         ecc_posteriors=None,
         msini_posteriors=None,
         sma_posteriors=None,
-        n_sma_bins=4,
+        n_sma_bins=2,
         n_e_bins=4,
-        n_msini_bins=2,
+        n_msini_bins=3,
+        mass_bin_idx=2,
+        sma_bin_idx=1
     ):
         self.ecc_posteriors = ecc_posteriors
         self.msini_posteriors = msini_posteriors
         self.sma_posteriors = sma_posteriors
         self.mass_posteriors = []
+
+        self.mass_bin_idx = mass_bin_idx
+        self.sma_bin_idx = sma_bin_idx
 
         # read in 3D completeness model
         self.completeness = np.load(
@@ -27,20 +34,21 @@ class HierHistogram(object):
                 n_msini_bins, n_e_bins, n_sma_bins
             )
         )
+
         self.ecc_bins = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
         sma_bins = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
+        sma_bins = sma_bins[sma_bin_idx:sma_bin_idx+2]
         msini_bins = np.load("completeness_model/{}msini_bins.npy".format(n_msini_bins))
+        msini_bins = msini_bins[mass_bin_idx:mass_bin_idx+2]
 
         # NOTE: here is where we define the bins as uniformly spaced in log(msini) and log(a),
         # and this propagates to the units of our histogram heights
         self.msini_bin_widths = np.log(msini_bins[1:]) - np.log(msini_bins[:-1])
         self.sma_bin_widths = np.log(sma_bins[1:]) - np.log(sma_bins[:-1])
+
         self.ecc_bin_widths = self.ecc_bins[1:] - self.ecc_bins[:-1]
 
         self.n_e_bins = len(self.ecc_bins) - 1
-        self.n_sma_bins = len(sma_bins) - 1
-        self.n_msini_bins = len(msini_bins) - 1
-
         self.n_posteriors = len(self.msini_posteriors)
 
         # in theory the posteriors have different lengths, but I downsample them to all have
@@ -84,32 +92,32 @@ class HierHistogram(object):
                 )
                 self.mass_labels[mass_mask, k] = i
 
-        self.bin_widths = np.zeros((self.n_e_bins, self.n_sma_bins, self.n_msini_bins))
-        for i in range(self.n_e_bins):
-            for j in range(self.n_sma_bins):
-                for k in range(self.n_msini_bins):
-                    self.bin_widths[i, j, k] = (
-                        self.ecc_bin_widths[i]
-                        * self.sma_bin_widths[j]
-                        * self.msini_bin_widths[k]
-                    )
-
     def calc_likelihood(self, x):
         """
         This method overwrites ePop!'s default, adding the ability to correct
-        for completeness and to fit a pdf that is just histogram heights in a,e, msini
-        space
+        for completeness and to fit a pdf that is a gaussian in a single mass/sma bin
+        (i.e. the gaussian is only a function of e)
 
-        histogram_heights: array of size (N_ecc x N_a x N_msini) of free parameters
+        x: array of size (3) of free parameters: mu, sigma, A
         """
 
-        # apply priors keeping histogram heights above 0
-        for i in x:
-            if i < 0:
-                return -np.inf
-        histogram_heights = x.reshape(
-            (self.n_e_bins, self.n_sma_bins, self.n_msini_bins)
-        )
+        # apply priors
+        mu = x[0]
+        sigma = x[1]
+        A = x[2]
+        if sigma < 0:
+            return -np.inf
+        if mu < 0 or sigma < 0 or A < 0:
+            return -np.inf
+        if mu > 1:
+            return -np.inf
+        # if sigma > 1.5:
+        #     return -np.inf
+        # if A > 100:
+        #     return -np.inf
+    
+        def gaussian_val(x):
+            return A * np.exp( -((x-mu)/sigma)**2)
 
         system_sums = np.zeros(self.n_posteriors)
         for i in range(self.n_posteriors):
@@ -129,7 +137,7 @@ class HierHistogram(object):
 
                     system_sums[i] += (
                         self.completeness[ecc_idx, sma_idx, msini_idx]
-                        * histogram_heights[ecc_idx, sma_idx, mass_idx]
+                        * gaussian_val(self.ecc_posteriors[i][j])
                         / self.post_len
                     )
 
@@ -137,16 +145,24 @@ class HierHistogram(object):
 
         # add in exponential part of HBM likelihood
         # this is (negative) the expected number of planets detected by the survey; good sanity check
-        norm_constant = -np.sum(self.completeness * histogram_heights * self.bin_widths)
-        print(norm_constant)
+        def gaussian_integral(x, mu, sigma):
+            return 0.5 * np.sqrt(np.pi)*sigma * erf((mu-x)/sigma)
+        
+        norm_constant = 0
+        for i in np.arange(self.n_e_bins):
+            out_of_integral_constant = A * self.msini_bin_widths * self.sma_bin_widths * self.completeness[i, self.sma_bin_idx, self.mass_bin_idx]
+
+            d_norm_constant = out_of_integral_constant * (gaussian_integral(self.ecc_bins[i],mu,sigma) - gaussian_integral(self.ecc_bins[i+1],mu,sigma) )
+            norm_constant -= d_norm_constant
         log_likelihood += norm_constant
 
         return log_likelihood
 
     def sample(self, nsteps, burn_steps=200, nwalkers=100):
 
-        ndim = self.n_e_bins * self.n_sma_bins * self.n_msini_bins
-        p0 = np.random.uniform(0, 50, size=(nwalkers, ndim))
+        ndim = 3
+        p0 = np.random.uniform(0, 1, size=(nwalkers, ndim))
+        p0[:,2] = np.random.uniform(0,100, size=nwalkers)
 
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.calc_likelihood)
         state = sampler.run_mcmc(p0, burn_steps, progress=True)
@@ -166,7 +182,7 @@ if __name__ == "__main__":
     ecc_posteriors = []
     msini_posteriors = []
     sma_posteriors = []
-    n_samples = 999  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
+    n_samples = 50#999 # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 
     for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
 
@@ -192,15 +208,19 @@ if __name__ == "__main__":
 
     n_msini_bins = 3
     n_sma_bins = 2
-    n_e_bins = 4
+    n_e_bins = 5
+    mass_idx = 1
+    sma_idx = 1
 
-    like = HierHistogram(
+    like = HierGaussian(
         ecc_posteriors,
         msini_posteriors=msini_posteriors,
         sma_posteriors=sma_posteriors,
         n_sma_bins=n_sma_bins,
         n_e_bins=n_e_bins,
         n_msini_bins=n_msini_bins,
+        mass_bin_idx=mass_idx,
+        sma_bin_idx=sma_idx
     )
 
     print("Running MCMC!")
@@ -220,7 +240,7 @@ if __name__ == "__main__":
         os.mkdir(savedir)
 
     np.savetxt(
-        "{}/epop_samples_burn{}_total{}.csv".format(savedir, burn_steps, nsteps),
+        "{}/gaussian_samples_burn{}_total{}_massidx{}_smaidx{}.csv".format(savedir, burn_steps, nsteps, mass_idx, sma_idx),
         hbm_samples,
         delimiter=",",
     )

@@ -96,7 +96,7 @@ def compute_importance_probabilities(
             label="analytically calculated",
         )
         ax[0].legend()
-        ax[0].set_xlabel("sma [au]")
+        ax[0].set_xlabel("$a$ [au]")
 
         ax[1].hist(
             msini_prior[msini_prior > 0],
@@ -107,10 +107,11 @@ def compute_importance_probabilities(
         )
         msini2plot = np.linspace(0, msini_max, int(1e3))
 
-        # TODO: something is a little off with the math of this prior. Come back to it later.
+        # TODO: something is a little off with the math of this prior. Edge effects?
+        # Doesn't seem to make any impact whatsoever for this paper though.
         msini_prior_vals = calc_msini_prior(msini2plot, msini2plot)
         ax[1].plot(msini2plot, msini_prior_vals, color="k")
-        ax[1].set_xlabel("Msini [Mearth]")
+        ax[1].set_xlabel("M$\sin{i}$ [M$_{\\oplus}$]")
 
         for a in ax:
             a.set_ylabel("probability")
@@ -149,10 +150,10 @@ for pl in legacy_planets.iterrows():
         print("{} pl {}".format(pl[1].hostname, int(pl[1].pl_index)))
         print("Copying number {}".format(pl[0]))
         starname = pl[1].hostname
-        # if starname not in [
-        #     "8375",  # not fixed
-        # ]:  # (can use this logic to rerun transfers for only a subset of objects)
-        #     continue
+        if starname not in [
+            "141399"#,"111031"
+        ]:  # (can use this logic to rerun transfers for only a subset of objects)
+            continue
         if (
             starname != "213472"
         ):  # this one was modeled with thejoker (as was 26161, which doesn't seem to be in the results) (I'm not interested in partial orbits here)
@@ -317,9 +318,10 @@ for pl in legacy_planets.iterrows():
             )
 
             ax[0].legend()
-            ax[0].set_xlabel("sma [au]")
-            ax[1].set_xlabel("msini [Mearth]")
-            ax[2].set_xlabel("ecc")
+            ax[0].set_xlabel("$a$ [au]")
+            ax[1].set_xlabel("M$\sin{{i}}$ [M$_{{\\oplus}}$]")
+            ax[2].set_xlabel("$e$")
+            ax[1].set_ylabel('relative prob.')
 
             plt.tight_layout()
             plt.savefig(
