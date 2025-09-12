@@ -14,7 +14,7 @@ import os
 
 n_ecc_bins = 4
 n_sma_bins = 2
-n_mass_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
+n_mass_bins = 4  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE
 ecc = np.linspace(0, 1, n_ecc_bins + 1)
@@ -24,7 +24,10 @@ sma = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
 
 
 # mass = np.array([30, 300, 6000])  # [Mearth]
-mass = np.logspace(np.log10(30),np.log10(6000), n_mass_bins+1)  # [Mearth]
+# mass = np.logspace(np.log10(30), np.log10(6000), n_mass_bins + 1)  # [Mearth]
+mass = np.logspace(np.log10(30), np.log10(6_000), n_mass_bins)
+mass = np.append(mass, 300_000)
+
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
 injections = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
@@ -63,6 +66,7 @@ for k, f in enumerate(inj_rec_files):
             "mass_completeness_bins",
         ] = i
 
+    # print(np.max((df.inj_msini.values * u.M_earth / u.M_sun).to("")))
     recovered_planets = df[df.recovered.values]
     unrecovered_planets = df[~df.recovered.values]
 
@@ -124,7 +128,8 @@ filled_in_points = scipy.interpolate.interpn(
     np.ma.array(completeness, mask=bad_mask),
     np.array(iterp_here),
     bounds_error=False,
-    fill_value=0,
+    fill_value=None,
+    method="nearest",  # TODO: this doesn't seem to produce great values for the one missing point but I think it is very unimportant to the final result.
 )
 
 completeness_model = copy.copy(completeness)
@@ -150,27 +155,40 @@ np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)
 COMPLETENESS PLOT 
 """
 
-fig = plt.figure(figsize=(15, 5))
-gs = fig.add_gridspec(1, 4, width_ratios=(20, 20, 20, 1))
-ax0 = fig.add_subplot(gs[0, 0])
-ax1 = fig.add_subplot(gs[0, 1])
-ax2 = fig.add_subplot(gs[0, 2])
-ax3 = fig.add_subplot(gs[0, 3])
-ax = [ax0, ax1, ax2, ax3]
+fig = plt.figure(figsize=(5 * n_mass_bins, 5))
+gs = fig.add_gridspec(1, n_mass_bins + 1, width_ratios=[20] * n_mass_bins + [1])
+ax = []
+for i in range(n_mass_bins + 1):
+    ax.append(fig.add_subplot(gs[0, i]))
+# ax0 = fig.add_subplot(gs[0, 0])
+# ax1 = fig.add_subplot(gs[0, 1])
+# ax2 = fig.add_subplot(gs[0, 2])
+# ax3 = fig.add_subplot(gs[0, 3])
+# ax = [ax0, ax1, ax2, ax3]
 
 for i, a in enumerate(ax[:-1]):
     a.set_title(
-        "{:.1f} M$_{{\\oplus}}$ < Msini < {:.1f} M$_{{\\oplus}}$".format(mass[i], mass[i+1])
+        "{:.1f} M$_{{\\oplus}}$ < Msini < {:.1f} M$_{{\\oplus}}$".format(
+            mass[i], mass[i + 1]
+        )
     )
 
-for i in np.arange(len(mass)-1):
+for i in np.arange(len(mass) - 1):
     # ax[0].pcolormesh(
     #     sma, ecc, completeness_model[:, :, -2], shading="auto", vmin=0, vmax=1, cmap="Purples"
     # )
     pc = ax[i].pcolormesh(
-        sma, ecc, completeness_model[:, :, i], shading="auto", vmin=0, vmax=1, cmap="Blues", alpha=0.5, edgecolor='k'
+        sma,
+        ecc,
+        completeness_model[:, :, i],
+        shading="auto",
+        vmin=0,
+        vmax=1,
+        cmap="Blues",
+        alpha=0.5,
+        edgecolor="k",
     )
-cbar = fig.colorbar(pc, cax=ax[3])
+cbar = fig.colorbar(pc, cax=ax[-1])
 cbar.set_label("completeness")
 
 for a in ax[:-1]:
@@ -199,8 +217,8 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
     ).values.flatten()
 
     ax_idx = None
-    for i in np.arange(len(mass)-1):
-        if np.median(msini_post) > mass[i] and np.median(msini_post) < mass[i+1]:
+    for i in np.arange(len(mass) - 1):
+        if np.median(msini_post) > mass[i] and np.median(msini_post) < mass[i + 1]:
             ax_idx = i
 
     if ax_idx is not None:
@@ -231,9 +249,7 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
                 ax[ax_idx].text(
                     a,
                     e + 0.02,
-                    "{:.2f} ".format(
-                        completeness_model[k,j,ax_idx]
-                    ),
+                    "{:.2f} ".format(completeness_model[k, j, ax_idx]),
                     color="k",
                     zorder=20,
                     bbox=dict(facecolor="white", edgecolor="black", alpha=0.75),

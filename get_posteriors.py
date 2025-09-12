@@ -12,6 +12,8 @@ Grabs ecc, msini, and sma posteriors for the planet sample, uses importance
 resampling to obtain samples the posteriors assuming they were sampled under
 unifom priors on log(sma) and log(msini), and writes them as csvs to be injested 
 into the HBM model.
+
+NOTE: I'm also including detected stellar binaries here
 """
 
 legacy_planets = pd.read_csv(
@@ -151,7 +153,7 @@ for pl in legacy_planets.iterrows():
         print("Copying number {}".format(pl[0]))
         starname = pl[1].hostname
         if starname not in [
-            "141399"#,"111031"
+            "141399"  # ,"111031"
         ]:  # (can use this logic to rerun transfers for only a subset of objects)
             continue
         if (
@@ -321,7 +323,7 @@ for pl in legacy_planets.iterrows():
             ax[0].set_xlabel("$a$ [au]")
             ax[1].set_xlabel("M$\sin{{i}}$ [M$_{{\\oplus}}$]")
             ax[2].set_xlabel("$e$")
-            ax[1].set_ylabel('relative prob.')
+            ax[1].set_ylabel("relative prob.")
 
             plt.tight_layout()
             plt.savefig(
