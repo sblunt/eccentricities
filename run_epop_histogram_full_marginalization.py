@@ -5,8 +5,6 @@ import os
 import emcee
 
 # WIP implementation of the proper incliantion marginalization
-# Abandoned when it was almost debugged due to reasons enumerated
-# in the paper.
 
 
 class HierHistogram(object):
@@ -86,21 +84,6 @@ class HierHistogram(object):
                     self.msini_posteriors[k] < msini_bins[i + 1]
                 )
                 self.completeness_labels[msini_mask, 2, k] = i
-
-                ### THIS ASSUMES UNIFORM COSI IN ALL BINS
-                # cosi_samples = np.random.uniform(
-                #     -1, 1, size=len(self.msini_posteriors[k])
-                # )
-                # mass_posterior = self.msini_posteriors[k] / (
-                #     np.sin(np.arccos(cosi_samples))
-                # )
-                # self.mass_posteriors.append(mass_posterior)
-
-                # mass_mask = (mass_posterior >= msini_bins[i]) & (
-                #     mass_posterior < msini_bins[i + 1]
-                # )
-                # self.mass_labels[mass_mask, k] = i
-                ###
 
             for i in range(len(self.mass_bins)):
                 ### THIS ASSUMES UNIFORM COSI ONLY IN SINGLE MASS BIN
@@ -198,74 +181,7 @@ class HierHistogram(object):
         ## OLD:
         # norm_constant = -np.sum(self.completeness * histogram_heights * self.bin_widths)
         #######
-        def _integral(x, B):
-            # copied this from wolfram. god bless symbolic integrators.
-            # indefinite integral of 1 - arcsin(B/y)dy evaluated at y=x
-            xpr = x / B
-            integrated_value = (
-                x
-                - (
-                    xpr * np.arcsin(1 / xpr)
-                    + np.log(np.abs(xpr + np.tan(np.arccos(1 / xpr))))
-                )
-                * B
-            )
-            return integrated_value
 
-        # TODO: try caching this for speed boost, but be careful of state
-        def _integral_under_msini(msini):
-            # this is the integral over the area that looks like a rectangle with bite out of top right corner
-            integral = 0
-            for mass_idx in np.arange(self.n_mass_bins):
-                theta_n = histogram_heights[
-                    ecc_idx, sma_idx, mass_idx
-                ]  # fitted paramter
-
-                inc_intercept_up = np.arcsin(msini / self.mass_bins[mass_idx + 1])
-                inc_intercept_down = np.arcsin(msini / self.mass_bins[mass_idx])
-
-                if np.isnan(inc_intercept_up) and np.isnan(
-                    inc_intercept_down
-                ):  # integral is over square area
-                    integral += (
-                        2
-                        * theta_n
-                        * (self.mass_bins[mass_idx + 1] - self.mass_bins[mass_idx])
-                    )
-
-                elif not np.isnan(inc_intercept_up) and not np.isnan(
-                    inc_intercept_down
-                ):  # integral is bounded by msini = const curve
-                    integral += (
-                        2
-                        * theta_n
-                        * (
-                            _integral(self.mass_bins[mass_idx + 1], msini)
-                            - _integral(self.mass_bins[mass_idx], msini)
-                        )
-                    )
-
-                else:
-                    assert not np.isnan(inc_intercept_up) and np.isnan(
-                        inc_intercept_down
-                    )
-                    # account for case of round+square
-                    integral += (
-                        2
-                        * theta_n
-                        * (
-                            _integral(self.mass_bins[mass_idx + 1], msini)
-                            - _integral(msini, msini)
-                        )
-                    )
-                    integral += 2 * theta_n * (msini - self.mass_bins[mass_idx])
-
-            import pdb
-
-            pdb.set_trace()
-            return integral
-
-        norm_constant = 0
         # integrate mass and inc over msini boundaries, multiplying at each step by completeness and a/e integral
         for ecc_idx in np.arange(self.n_e_bins):
             for sma_idx in np.arange(
@@ -416,3 +332,72 @@ if __name__ == "__main__":
     #     )[0]
 
     #     ###
+
+# def _integral(x, B):
+#             # copied this from wolfram. god bless symbolic integrators.
+#             # indefinite integral of 1 - arcsin(B/y)dy evaluated at y=x
+#             xpr = x / B
+#             integrated_value = (
+#                 x
+#                 - (
+#                     xpr * np.arcsin(1 / xpr)
+#                     + np.log(np.abs(xpr + np.tan(np.arccos(1 / xpr))))
+#                 )
+#                 * B
+#             )
+#             return integrated_value
+
+#         # TODO: try caching this for speed boost, but be careful of state
+#         def _integral_under_msini(msini):
+#             # this is the integral over the area that looks like a rectangle with bite out of top right corner
+#             integral = 0
+#             for mass_idx in np.arange(self.n_mass_bins):
+#                 theta_n = histogram_heights[
+#                     ecc_idx, sma_idx, mass_idx
+#                 ]  # fitted paramter
+
+#                 inc_intercept_up = np.arcsin(msini / self.mass_bins[mass_idx + 1])
+#                 inc_intercept_down = np.arcsin(msini / self.mass_bins[mass_idx])
+
+#                 if np.isnan(inc_intercept_up) and np.isnan(
+#                     inc_intercept_down
+#                 ):  # integral is over square area
+#                     integral += (
+#                         2
+#                         * theta_n
+#                         * (self.mass_bins[mass_idx + 1] - self.mass_bins[mass_idx])
+#                     )
+
+#                 elif not np.isnan(inc_intercept_up) and not np.isnan(
+#                     inc_intercept_down
+#                 ):  # integral is bounded by msini = const curve
+#                     integral += (
+#                         2
+#                         * theta_n
+#                         * (
+#                             _integral(self.mass_bins[mass_idx + 1], msini)
+#                             - _integral(self.mass_bins[mass_idx], msini)
+#                         )
+#                     )
+
+#                 else:
+#                     assert not np.isnan(inc_intercept_up) and np.isnan(
+#                         inc_intercept_down
+#                     )
+#                     # account for case of round+square
+#                     integral += (
+#                         2
+#                         * theta_n
+#                         * (
+#                             _integral(self.mass_bins[mass_idx + 1], msini)
+#                             - _integral(msini, msini)
+#                         )
+#                     )
+#                     integral += 2 * theta_n * (msini - self.mass_bins[mass_idx])
+
+#             import pdb
+
+#             pdb.set_trace()
+#             return integral
+
+#         norm_constant = 0
