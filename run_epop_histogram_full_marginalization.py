@@ -3,8 +3,11 @@ import glob
 import pandas as pd
 import os
 import emcee
+from functools import lru_cache
 
-# WIP implementation of the proper incliantion marginalization
+# proper incliantion marginalization
+
+num_stars_cps = 719
 
 
 class HierHistogram(object):
@@ -17,10 +20,12 @@ class HierHistogram(object):
         n_sma_bins=4,
         n_e_bins=4,
         n_msini_bins=2,
+        bd_prior=True,
     ):
         self.ecc_posteriors = ecc_posteriors
         self.msini_posteriors = msini_posteriors
         self.sma_posteriors = sma_posteriors
+        self.bd_prior = bd_prior
 
         # read in 3D completeness model
         self.completeness = np.load(
@@ -28,27 +33,33 @@ class HierHistogram(object):
                 n_msini_bins, n_e_bins, n_sma_bins
             )
         )
-        self.ecc_bins = np.load(
+        self.ecc_bin_edges = np.load(
             "completeness_model/{}ecc_bins.npy".format(n_e_bins)
-        )  # TODO: change var name to ecc_bin bounds and same for others
-        sma_bins = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
-        msini_bins = np.load("completeness_model/{}msini_bins.npy".format(n_msini_bins))
-        self.msini_bins = msini_bins
+        )
+        sma_bin_edges = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
+        msini_bin_edges = np.load(
+            "completeness_model/{}msini_bins.npy".format(n_msini_bins)
+        )
+        self.msini_bin_edges = msini_bin_edges
 
-        self.mass_bins = np.append(
-            0.1, msini_bins
-        )  # these are the bins we will use for the model fit. note that we also fit
+        self.mass_bin_edges = np.copy(msini_bin_edges)
 
         # NOTE: here is where we define the bins as uniformly spaced in log(msini) and log(a),
         # and this propagates to the units of our histogram heights
-        # self.msini_bin_widths = np.log(msini_bins[1:]) - np.log(msini_bins[:-1])
-        self.sma_bin_widths = np.log(sma_bins[1:]) - np.log(sma_bins[:-1])
-        self.ecc_bin_widths = self.ecc_bins[1:] - self.ecc_bins[:-1]
+        self.msini_bin_widths = np.log(self.msini_bin_edges[1:]) - np.log(
+            self.msini_bin_edges[:-1]
+        )
 
-        self.n_e_bins = len(self.ecc_bins) - 1
-        self.n_sma_bins = len(sma_bins) - 1
-        self.n_msini_bins = len(msini_bins) - 1
-        self.n_mass_bins = len(self.mass_bins) - 1
+        self.sma_bin_widths = np.log(sma_bin_edges[1:]) - np.log(sma_bin_edges[:-1])
+        self.ecc_bin_widths = self.ecc_bin_edges[1:] - self.ecc_bin_edges[:-1]
+        self.mass_bin_widths = np.log(self.mass_bin_edges[1:]) - np.log(
+            self.mass_bin_edges[:-1]
+        )
+
+        self.n_e_bins = len(self.ecc_bin_edges) - 1
+        self.n_sma_bins = len(sma_bin_edges) - 1
+        self.n_msini_bins = len(msini_bin_edges) - 1
+        self.n_mass_bins = len(self.mass_bin_edges) - 1
 
         self.n_posteriors = len(self.msini_posteriors)
 
@@ -62,55 +73,43 @@ class HierHistogram(object):
         #     (self.post_len, self.n_posteriors), dtype=int
         # )
 
-        self.cosi_limits = np.nan * np.ones(
-            (self.post_len, self.n_posteriors, self.n_mass_bins + 1),
-            dtype=int,
-        )
+        # self.cosi_limits = np.nan * np.ones(
+        #     (self.post_len, self.n_posteriors, self.n_mass_bins + 1),
+        #     dtype=int,
+        # )
 
         for k in range(self.n_posteriors):
 
-            for i in range(len(self.ecc_bins) - 1):
-                ecc_mask = (self.ecc_posteriors[k] >= self.ecc_bins[i]) & (
-                    self.ecc_posteriors[k] < self.ecc_bins[i + 1]
+            for i in range(self.n_e_bins):
+                ecc_mask = (self.ecc_posteriors[k] >= self.ecc_bin_edges[i]) & (
+                    self.ecc_posteriors[k] < self.ecc_bin_edges[i + 1]
                 )
                 self.completeness_labels[ecc_mask, 0, k] = i
-            for i in range(len(sma_bins) - 1):
-                sma_mask = (self.sma_posteriors[k] >= sma_bins[i]) & (
-                    self.sma_posteriors[k] < sma_bins[i + 1]
+            for i in range(self.n_sma_bins):
+                sma_mask = (self.sma_posteriors[k] >= sma_bin_edges[i]) & (
+                    self.sma_posteriors[k] < sma_bin_edges[i + 1]
                 )
                 self.completeness_labels[sma_mask, 1, k] = i
-            for i in range(len(msini_bins) - 1):
-                msini_mask = (self.msini_posteriors[k] >= msini_bins[i]) & (
-                    self.msini_posteriors[k] < msini_bins[i + 1]
+            for i in range(self.n_msini_bins):
+                msini_mask = (self.msini_posteriors[k] >= self.msini_bin_edges[i]) & (
+                    self.msini_posteriors[k] < self.msini_bin_edges[i + 1]
                 )
                 self.completeness_labels[msini_mask, 2, k] = i
 
-            for i in range(len(self.mass_bins)):
-                ### THIS ASSUMES UNIFORM COSI ONLY IN SINGLE MASS BIN
-                # compute the inclination limits that correspond to the boundaries of all larger mass bins
-                inc_limits = np.arcsin(self.msini_posteriors[k] / self.mass_bins[i])
+            # for i in range(len(self.mass_bins)):
+            #     ### THIS ASSUMES UNIFORM COSI ONLY IN SINGLE MASS BIN
+            #     # compute the inclination limits that correspond to the boundaries of all larger mass bins
+            #     inc_limits = np.arcsin(self.msini_posteriors[k] / self.mass_bins[i])
 
-                cosi_limits_i = np.cos(inc_limits)
+            #     cosi_limits_i = np.cos(inc_limits)
 
-                self.cosi_limits[:, k, i] = cosi_limits_i
+            #     self.cosi_limits[:, k, i] = cosi_limits_i
 
-            for j in np.arange(self.post_len):
-                cosi_limits_i = self.cosi_limits[j, k, :]
-                if np.isnan(self.cosi_limits[j, k, :]).any():
-                    cosi_limits_i[np.max(np.where(np.isnan(cosi_limits_i))[0])] = 0
-                self.cosi_limits[j, k, :] = cosi_limits_i
-
-            ###
-
-        # self.bin_widths = np.zeros((self.n_e_bins, self.n_sma_bins, self.n_msini_bins))
-        # for i in range(self.n_e_bins):
-        #     for j in range(self.n_sma_bins):
-        #         for k in range(self.n_msini_bins):e
-        #             self.bin_widths[i, j, k] = (
-        #                 self.ecc_bin_widths[i]
-        #                 * self.sma_bin_widths[j]
-        #                 * self.msini_bin_widths[k]
-        #             )
+            # for j in np.arange(self.post_len):
+            #     cosi_limits_i = self.cosi_limits[j, k, :]
+            #     if np.isnan(self.cosi_limits[j, k, :]).any():
+            #         cosi_limits_i[np.max(np.where(np.isnan(cosi_limits_i))[0])] = 0
+            #     self.cosi_limits[j, k, :] = cosi_limits_i
 
     def calc_likelihood(self, x):
         """
@@ -129,10 +128,28 @@ class HierHistogram(object):
             (self.n_e_bins, self.n_sma_bins, self.n_mass_bins)
         )
 
+        bd_occurrence = 0
+        bd_max_occurrence = 0.05
+        if (
+            self.bd_prior
+        ):  # set a prior that keeps bd occurrence rate below bd_max_occurrence
+            for i in np.arange(self.n_e_bins):
+                for j in np.arange(self.n_sma_bins):
+                    bd_occurrence += (
+                        histogram_heights[i, j, -1]
+                        * self.ecc_bin_widths[i]
+                        * self.sma_bin_widths[j]
+                        * self.mass_bin_widths[-1]
+                    ) / num_stars_cps
+
+            if bd_occurrence > bd_max_occurrence:
+                return -np.inf
+
         system_sums = np.zeros(self.n_posteriors)
         for i in range(self.n_posteriors):
 
             for j in range(self.post_len):
+
                 ecc_idx = self.completeness_labels[j, 0, i]
                 sma_idx = self.completeness_labels[j, 1, i]
                 msini_idx = self.completeness_labels[j, 2, i]
@@ -142,36 +159,35 @@ class HierHistogram(object):
                     sma_idx = int(sma_idx)
                     msini_idx = int(msini_idx)
 
-                    cosi_limits_i = self.cosi_limits[j, i, :]
-
-                    # cosi_limits_i = np.append(
-                    #     np.append(
-                    #         self.cosi_limits[j, i, :][self.cosi_limits[j, i, :] > 0]
-                    #     ),
-                    #     1,  # self.cosi_limits has shape (post_len, n_posteriors, n_msini_bins+1)
-                    # )
-
-                    msini_idx = int(msini_idx)
                     msini_value = self.msini_posteriors[i][j]
                     for mass_idx in np.arange(self.n_mass_bins):
-                        if msini_value <= self.mass_bins[mass_idx]:
 
-                            # TODO: check that this is approx consistent with easier way of doing it
-                            # TODO: keep both implementations & check them against each other
-                            system_sums[i] += (
-                                self.completeness[ecc_idx, sma_idx, msini_idx]
-                                * 2
-                                * (
-                                    histogram_heights[
-                                        ecc_idx, sma_idx, mass_idx - 1
-                                    ]  # basically we're weighting each histogram height (occurrence rate in mass space) by the fraction of inclination probability space
-                                    * (
-                                        cosi_limits_i[mass_idx]
-                                        - cosi_limits_i[mass_idx - 1]
-                                    )
-                                )
-                                / self.post_len
+                        mass_val_hi = self.mass_bin_edges[mass_idx + 1]
+                        msini_m_hi = msini_value / mass_val_hi
+                        if msini_m_hi > 1:
+                            msini_m_hi = 1
+
+                        mass_val_lo = self.mass_bin_edges[mass_idx]
+                        msini_m_lo = msini_value / mass_val_lo
+                        if msini_m_lo > 1:
+                            msini_m_lo = 1
+
+                        incweight_factor = np.sqrt(1 - msini_m_hi**2) - np.sqrt(
+                            1 - msini_m_lo**2
+                        )  # can sanity check here that these add up to 1:
+                        # print(incweight_factor)
+
+                        system_sum_j = (
+                            self.completeness[ecc_idx, sma_idx, msini_idx]
+                            * (
+                                histogram_heights[
+                                    ecc_idx, sma_idx, mass_idx
+                                ]  # basically we're weighting each histogram height (occurrence rate in mass space) by the fraction of inclination probability space
+                                * incweight_factor
                             )
+                            / self.post_len
+                        )
+                        system_sums[i] += system_sum_j
 
         log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
         # print(log_likelihood)
@@ -182,39 +198,84 @@ class HierHistogram(object):
         # norm_constant = -np.sum(self.completeness * histogram_heights * self.bin_widths)
         #######
 
+        @lru_cache
+        def _integral(x, A):
+            """integral of sqrt(1- ((e^x) / e^A)^2 )
+
+            x is used for log(msini), A is log(mass)
+            """
+            if x - A > 0:  # if msini < mass
+                return 0
+            else:
+                # return 0.5 * x * np.sqrt(1 - x**2) - np.arctan(
+                #     np.sqrt(1 - x**2) / (x + 1)
+                # )
+
+                const = np.sqrt(1 - np.exp(2 * (x - A)))
+
+                return const - np.arctanh(const)
+
+        @lru_cache
+        def msini_integral(mass_idx, msini_bin_idx):
+            msini_hi = self.msini_bin_edges[msini_bin_idx + 1]
+            msini_lo = self.msini_bin_edges[msini_bin_idx]
+
+            mass_hi = self.mass_bin_edges[mass_idx + 1]
+            mass_lo = self.mass_bin_edges[mass_idx]
+
+            msini_integral = (
+                (
+                    _integral(np.log(msini_hi), np.log(mass_hi))
+                    - _integral(np.log(msini_lo), np.log(mass_hi))
+                )
+            ) - (
+                _integral(np.log(msini_hi), np.log(mass_lo))
+                - _integral(np.log(msini_lo), np.log(mass_lo))
+            )
+
+            return msini_integral
+
+        norm_constant = 0
         # integrate mass and inc over msini boundaries, multiplying at each step by completeness and a/e integral
         for ecc_idx in np.arange(self.n_e_bins):
-            for sma_idx in np.arange(
-                self.n_sma_bins
-            ):  # TODO: can I vectorize the ecc/sma multiplication for speed boost?
-                for msini_bin_idx in np.arange(self.n_msini_bins)[1:]:
+            for sma_idx in np.arange(self.n_sma_bins):
+                for msini_bin_idx in np.arange(self.n_msini_bins):
+                    for mass_idx in np.arange(self.n_mass_bins):
 
-                    print(self.msini_bins[msini_bin_idx])
-                    Q_n = self.completeness[ecc_idx, sma_idx, msini_bin_idx]
-                    msini_integral = _integral_under_msini(
-                        self.msini_bins[msini_bin_idx]
-                    ) - _integral_under_msini(
-                        self.msini_bins[msini_bin_idx - 1]
-                    )  # TODO: why is this negative?
-
-                    norm_constant += (
-                        -Q_n
-                        * msini_integral
-                        * self.ecc_bin_widths[ecc_idx]
-                        * self.sma_bin_widths[sma_idx]
-                    )
+                        norm_constant += (
+                            self.completeness[ecc_idx, sma_idx, msini_bin_idx]
+                            * msini_integral(
+                                mass_idx, msini_bin_idx
+                            )  # NOTE: this converts dG/dMdi to dG/dMsini
+                            * histogram_heights[
+                                ecc_idx, sma_idx, mass_idx
+                            ]  # NOTE: could vectorize this for speed boost
+                            # * self.msini_bin_widths[msini_bin_idx] TODO: these made units incorrect
+                            * self.ecc_bin_widths[ecc_idx]
+                            * self.sma_bin_widths[sma_idx]
+                        )
+        # this is the expected total number of planets detected; good sanity check
         print(norm_constant)
-        log_likelihood += norm_constant
+        log_likelihood -= norm_constant
 
         return log_likelihood
 
     def sample(self, nsteps, burn_steps=200, nwalkers=100):
 
         ndim = self.n_e_bins * self.n_sma_bins * self.n_mass_bins
-        p0 = np.random.uniform(0, 50, size=(nwalkers, ndim))
+        p0 = np.random.uniform(
+            0, 25, size=(nwalkers, self.n_e_bins, self.n_sma_bins, self.n_mass_bins)
+        )
+
+        # start the bd occurrence rates lower to ease convergence
+        p0[:, :, :, -1] = np.random.uniform(
+            0, 5, size=(nwalkers, self.n_e_bins, self.n_sma_bins)
+        )
 
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.calc_likelihood)
-        state = sampler.run_mcmc(p0, burn_steps, progress=True)
+        state = sampler.run_mcmc(
+            p0.reshape((nwalkers, ndim)), burn_steps, progress=True
+        )
 
         print("Burn in complete!")
 
@@ -255,9 +316,9 @@ if __name__ == "__main__":
         msini_posteriors.append(msini_post[idxs])
         sma_posteriors.append(sma_post[idxs])
 
-    n_msini_bins = 4
-    n_sma_bins = 2
-    n_e_bins = 4
+    n_msini_bins = 3
+    n_sma_bins = 1
+    n_e_bins = 5
 
     like = HierHistogram(
         ecc_posteriors,
@@ -271,7 +332,7 @@ if __name__ == "__main__":
     print("Running MCMC!")
     burn_steps = 500
     nwalkers = 100
-    nsteps = 1  # 500
+    nsteps = 500
 
     hbm_samples = like.sample(
         nsteps,
@@ -279,7 +340,7 @@ if __name__ == "__main__":
         nwalkers=nwalkers,
     )
 
-    savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
+    savedir = f"plots/fullmarg_bdprior_{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 
     if not os.path.exists(savedir):
         os.mkdir(savedir)

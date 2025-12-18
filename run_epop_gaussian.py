@@ -7,6 +7,7 @@ from scipy.stats import norm
 from scipy.special import erf
 import time
 
+
 class HierGaussian(object):
 
     def __init__(
@@ -18,7 +19,7 @@ class HierGaussian(object):
         n_e_bins=4,
         n_msini_bins=3,
         mass_bin_idx=2,
-        sma_bin_idx=1
+        sma_bin_idx=1,
     ):
         self.ecc_posteriors = ecc_posteriors
         self.msini_posteriors = msini_posteriors
@@ -37,9 +38,9 @@ class HierGaussian(object):
 
         self.ecc_bins = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
         sma_bins = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
-        sma_bins = sma_bins[sma_bin_idx:sma_bin_idx+2]
+        sma_bins = sma_bins[sma_bin_idx : sma_bin_idx + 2]
         msini_bins = np.load("completeness_model/{}msini_bins.npy".format(n_msini_bins))
-        msini_bins = msini_bins[mass_bin_idx:mass_bin_idx+2]
+        msini_bins = msini_bins[mass_bin_idx : mass_bin_idx + 2]
 
         # NOTE: here is where we define the bins as uniformly spaced in log(msini) and log(a),
         # and this propagates to the units of our histogram heights
@@ -111,13 +112,13 @@ class HierGaussian(object):
             return -np.inf
         if mu > 1:
             return -np.inf
-        # if sigma > 1.5:
-        #     return -np.inf
-        # if A > 100:
-        #     return -np.inf
-    
+        if sigma > 1.5:
+            return -np.inf
+        if A > 100:
+            return -np.inf
+
         def gaussian_val(x):
-            return A * np.exp( -((x-mu)/sigma)**2)
+            return A * np.exp(-(((x - mu) / sigma) ** 2))
 
         system_sums = np.zeros(self.n_posteriors)
         for i in range(self.n_posteriors):
@@ -146,13 +147,21 @@ class HierGaussian(object):
         # add in exponential part of HBM likelihood
         # this is (negative) the expected number of planets detected by the survey; good sanity check
         def gaussian_integral(x, mu, sigma):
-            return 0.5 * np.sqrt(np.pi)*sigma * erf((mu-x)/sigma)
-        
+            return 0.5 * np.sqrt(np.pi) * sigma * erf((mu - x) / sigma)
+
         norm_constant = 0
         for i in np.arange(self.n_e_bins):
-            out_of_integral_constant = A * self.msini_bin_widths * self.sma_bin_widths * self.completeness[i, self.sma_bin_idx, self.mass_bin_idx]
+            out_of_integral_constant = (
+                A
+                * self.msini_bin_widths
+                * self.sma_bin_widths
+                * self.completeness[i, self.sma_bin_idx, self.mass_bin_idx]
+            )
 
-            d_norm_constant = out_of_integral_constant * (gaussian_integral(self.ecc_bins[i],mu,sigma) - gaussian_integral(self.ecc_bins[i+1],mu,sigma) )
+            d_norm_constant = out_of_integral_constant * (
+                gaussian_integral(self.ecc_bins[i], mu, sigma)
+                - gaussian_integral(self.ecc_bins[i + 1], mu, sigma)
+            )
             norm_constant -= d_norm_constant
         log_likelihood += norm_constant
 
@@ -162,7 +171,7 @@ class HierGaussian(object):
 
         ndim = 3
         p0 = np.random.uniform(0, 1, size=(nwalkers, ndim))
-        p0[:,2] = np.random.uniform(0,100, size=nwalkers)
+        p0[:, 2] = np.random.uniform(0, 100, size=nwalkers)
 
         sampler = emcee.EnsembleSampler(nwalkers, ndim, self.calc_likelihood)
         state = sampler.run_mcmc(p0, burn_steps, progress=True)
@@ -182,7 +191,7 @@ if __name__ == "__main__":
     ecc_posteriors = []
     msini_posteriors = []
     sma_posteriors = []
-    n_samples = 50#999 # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
+    n_samples = 50  # 999 # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
 
     for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
 
@@ -207,10 +216,10 @@ if __name__ == "__main__":
         sma_posteriors.append(sma_post[idxs])
 
     n_msini_bins = 3
-    n_sma_bins = 2
+    n_sma_bins = 1
     n_e_bins = 5
     mass_idx = 1
-    sma_idx = 1
+    sma_idx = 0
 
     like = HierGaussian(
         ecc_posteriors,
@@ -220,7 +229,7 @@ if __name__ == "__main__":
         n_e_bins=n_e_bins,
         n_msini_bins=n_msini_bins,
         mass_bin_idx=mass_idx,
-        sma_bin_idx=sma_idx
+        sma_bin_idx=sma_idx,
     )
 
     print("Running MCMC!")
@@ -240,7 +249,9 @@ if __name__ == "__main__":
         os.mkdir(savedir)
 
     np.savetxt(
-        "{}/gaussian_samples_burn{}_total{}_massidx{}_smaidx{}.csv".format(savedir, burn_steps, nsteps, mass_idx, sma_idx),
+        "{}/gaussian_samples_burn{}_total{}_massidx{}_smaidx{}.csv".format(
+            savedir, burn_steps, nsteps, mass_idx, sma_idx
+        ),
         hbm_samples,
         delimiter=",",
     )

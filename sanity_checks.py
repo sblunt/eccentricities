@@ -314,6 +314,7 @@ semiamp_sigmas = []
 semiamp_rms = []
 p_durs = []
 measunc_rms = []
+semiamps = []
 
 # this table is based on isoclassify, using Gaia DR2 parallaxes and K band magnitudes when known
 # (Rosenthal+ Table 2)
@@ -329,7 +330,7 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
     post_len = len(ecc_post)
 
     st_name = post_path.split("/")[-1].split("_")[1]
-    pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0].split('pl')[1]
+    pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0].split("pl")[1]
 
     msini_post = pd.read_csv(
         f"lee_posteriors/resampled/msini_{st_name}_pl{pl_num}.csv"
@@ -353,12 +354,23 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
 
         per_post = (np.sqrt((sma_post**3 / Mstar_prior)) * u.yr).to(u.day).value
 
-        samiamp_post = semi_amplitude(msini_post, per_post, Mstar_prior, ecc_post, Msini_units='earth')
+        samiamp_post = semi_amplitude(
+            msini_post, per_post, Mstar_prior, ecc_post, Msini_units="earth"
+        )
+        semiamps.append(np.median(samiamp_post))
         semiamp_sigmas.append(np.median(samiamp_post) / np.std(samiamp_post))
-        if np.median(samiamp_post) / np.std(samiamp_post) < 4:
-            print('{} fails with K sigma: {:.2f}'.format(st_name, np.median(samiamp_post) / np.std(samiamp_post)))
-        if np.median(ecc_post) / np.std(ecc_post) < 3:
-            print('{} fails with e sigma:{:.2f}'.format(st_name, np.median(ecc_post) / np.std(ecc_post)))
+        # if np.median(samiamp_post) / np.std(samiamp_post) < 4:
+        #     print(
+        #         "{} fails with K sigma: {:.2f}".format(
+        #             st_name, np.median(samiamp_post) / np.std(samiamp_post)
+        #         )
+        #     )
+        # if np.median(ecc_post) / np.std(ecc_post) < 3:
+        #     print(
+        #         "{} fails with e sigma:{:.2f}".format(
+        #             st_name, np.median(ecc_post) / np.std(ecc_post)
+        #         )
+        #     )
 
         # load the MAP fit
         with open(
@@ -369,20 +381,31 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
         ) as f:
             posterior = pickle.load(f)
             rms = np.std(posterior.likelihood.residuals())
-            semiamp_rms.append(posterior.params[f'k{pl_num}'].value / rms)
-            if semiamp_rms[-1] < 1.23:
-                print('{} fails with K/rms:{:.2f}'.format(st_name, semiamp_rms[-1]))
-            
-            obs_duration = np.max(posterior.likelihood.x) - np.min(posterior.likelihood.x)
-            per = posterior.params[f'per{pl_num}'].value
-            p_durs.append(obs_duration/per)
-            if obs_duration/per < 1.5:
-                print('{} fails with observation duration/P: {:.2f}'.format(st_name, obs_duration/per))
+            semiamp_rms.append(posterior.params[f"k{pl_num}"].value / rms)
+            # if semiamp_rms[-1] < 1.23:
+            #     print("{} fails with K/rms:{:.2f}".format(st_name, semiamp_rms[-1]))
+
+            obs_duration = np.max(posterior.likelihood.x) - np.min(
+                posterior.likelihood.x
+            )
+            per = posterior.params[f"per{pl_num}"].value
+            p_durs.append(obs_duration / per)
+            # if obs_duration / per < 1.5:
+            #     print(
+            #         "{} fails with observation duration/P: {:.2f}".format(
+            #             st_name, obs_duration / per
+            #         )
+            #     )
             mean_meas_unc = np.median(posterior.likelihood.errorbars())
             measunc_rms.append(mean_meas_unc / rms)
-            if rms/mean_meas_unc < 1/3:
-                print('{} fails with rms/mean meas. unc: {:.2f}'.format(st_name, mean_meas_unc/rms))
-        
+            # if rms / mean_meas_unc < 1 / 3:
+            #     print(
+            #         "{} fails with rms/mean meas. unc: {:.2f}".format(
+            #             st_name, mean_meas_unc / rms
+            #         )
+            #     )
+
+print(np.median(semiamps))
 
 ax[0].hist(
     ecc_sigmas,
@@ -395,30 +418,66 @@ ax[0].set_xlabel("e/$\sigma_{{\\mathrm{{e}}}}$")
 ax[0].axvline(3, color="k", ls="--")
 ax[0].set_xscale("log")
 
-ax[1].hist(
-    semiamp_sigmas,
-    color="grey",
-    histtype="stepfilled",bins=40
-)
+ax[1].hist(semiamp_sigmas, color="grey", histtype="stepfilled", bins=40)
 ax[1].set_xlabel("K/$\sigma_{{\\mathrm{{K}}}}$")
 ax[1].axvline(4, color="k", ls="--")
 
-ax[2].hist(semiamp_rms, color='grey', histtype='stepfilled', bins=np.logspace(np.log10(1), np.log10(2500), 40))
+ax[2].hist(
+    semiamp_rms,
+    color="grey",
+    histtype="stepfilled",
+    bins=np.logspace(np.log10(1), np.log10(2500), 40),
+)
 ax[2].set_xlabel("K$_{{\\mathrm{{MAP}}}}$/RMS")
 ax[2].axvline(1.23, color="k", ls="--")
 ax[2].set_xscale("log")
 
-ax[3].hist(p_durs, color='grey', histtype='stepfilled', bins=np.logspace(np.log10(1), np.log10(500), 40))
+ax[3].hist(
+    p_durs,
+    color="grey",
+    histtype="stepfilled",
+    bins=np.logspace(np.log10(1), np.log10(500), 40),
+)
 ax[3].set_xlabel("obs dir./P$_{{\\mathrm{{MAP}}}}$")
 ax[3].axvline(1.5, color="k", ls="--")
 ax[3].set_xscale("log")
 
-ax[4].hist(np.array(measunc_rms), color='grey', histtype='stepfilled', bins=40)
+ax[4].hist(np.array(measunc_rms), color="grey", histtype="stepfilled", bins=40)
 ax[4].set_xlabel("mean meas. unc./RMS")
-ax[4].axvline(1/3, color="k", ls="--")
+ax[4].axvline(1 / 3, color="k", ls="--")
 
 
 for a in ax:
     a.set_box_aspect()
-    a.set_ylim(0,7)
+    a.set_ylim(0, 7)
 plt.savefig("plots/sanity_checks/2for1.png", dpi=250)
+
+
+""""
+Grether+ 2006 says 11% of solar-type stars have close (<5 yr) stellar companions.
+Assume all of these have masses 0.1 Msun (worst case scenario). Assuming they are
+uniformly oriented on surface of sphere, then we expect the number in the
+msini range to be what's calculated below.
+"""
+
+gamma = 0.008
+
+n_stars_cps = 719
+
+mtrue = (13 * u.M_jup).to(u.M_sun).value  # [Msun]
+
+msini_bin_limits = np.array(
+    [0.00180209, 0.01802094]
+)  # [Msun] msini bin of interest (where ecc peak occurs)
+
+mratio_hi = msini_bin_limits[1] / mtrue
+mratio_lo = msini_bin_limits[0] / mtrue
+
+if mratio_hi > 1:
+    mratio_hi = 1
+
+n_interloping_binaries = (
+    gamma * n_stars_cps * (np.cos(np.arcsin(mratio_lo)) - np.cos(np.arcsin(mratio_hi)))
+)
+
+# print(n_interloping_binaries)

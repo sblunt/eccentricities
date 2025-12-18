@@ -12,25 +12,33 @@ import copy
 import astropy.units as u, astropy.constants as cst
 import os
 
-n_ecc_bins = 4
-n_sma_bins = 2
-n_mass_bins = 4  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
+n_ecc_bins = 5
+n_sma_bins = 1
+n_msini_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
 
 # NOTE: SAMPLE SELECTION DEFINED HERE
-ecc = np.linspace(0, 1, n_ecc_bins + 1)
+ecc_bin_edges = np.linspace(0, 1, n_ecc_bins + 1)
 
 # these sma/msini limits overlap with BJ's bins
-sma = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
+sma_bin_edges = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
 
 
 # mass = np.array([30, 300, 6000])  # [Mearth]
 # mass = np.logspace(np.log10(30), np.log10(6000), n_mass_bins + 1)  # [Mearth]
-mass = np.logspace(np.log10(30), np.log10(6_000), n_mass_bins)
-mass = np.append(mass, 300_000)
+# msini = np.logspace(np.log10(30), np.log10(6_000), n_mass_bins)
+# mass = np.append(mass, 300_000)
+# msini_bin_edges = np.append(
+#     np.logspace(np.log10(30), np.log10(6_000), n_msini_bins), 300_000
+# )
+
+msini_bin_edges = np.array([30, 1_000, 6_000, 30_000])  # this is what I will use
+# msini_bin_edges = np.array(
+#     [30, 300, 6_000, 30_000]
+# )  # this is what BJ uses (plus the bin for bds)
 
 
-recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
-injections = np.zeros((n_ecc_bins, n_sma_bins, n_mass_bins))
+recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_msini_bins))
+injections = np.zeros((n_ecc_bins, n_sma_bins, n_msini_bins))
 
 inj_rec_files = glob.glob("/home/sblunt/CLSI/completeness/recoveries_all/*.csv")
 for k, f in enumerate(inj_rec_files):
@@ -40,29 +48,38 @@ for k, f in enumerate(inj_rec_files):
     df["ecc_completeness_bins"] = np.nan
     df["sma_completeness_bins"] = np.nan
     df["mass_completeness_bins"] = np.nan
-    for i in np.arange(len(ecc) - 1):
+    for i in np.arange(n_ecc_bins):
         # df["ecc_completeness_bins"][
         #     ((df.inj_e.values >= ecc[i]) & (df.inj_e.values < ecc[i + 1]))
         # ] = i
         df.loc[
-            ((df.inj_e.values >= ecc[i]) & (df.inj_e.values < ecc[i + 1])),
+            (
+                (df.inj_e.values >= ecc_bin_edges[i])
+                & (df.inj_e.values < ecc_bin_edges[i + 1])
+            ),
             "ecc_completeness_bins",
         ] = i
-    for i in np.arange(len(sma) - 1):
+    for i in np.arange(n_sma_bins):
         # df["sma_completeness_bins"][
         #     ((df.inj_au.values >= sma[i]) & (df.inj_au.values < sma[i + 1]))
         # ] = i
         df.loc[
-            ((df.inj_au.values >= sma[i]) & (df.inj_au.values < sma[i + 1])),
+            (
+                (df.inj_au.values >= sma_bin_edges[i])
+                & (df.inj_au.values < sma_bin_edges[i + 1])
+            ),
             "sma_completeness_bins",
         ] = i
 
-    for i in np.arange(len(mass) - 1):
+    for i in np.arange(n_msini_bins):
         # df["mass_completeness_bins"][
         #     ((df.inj_msini.values >= mass[i]) & (df.inj_msini.values < mass[i + 1]))
         # ] = i
         df.loc[
-            ((df.inj_msini.values >= mass[i]) & (df.inj_msini.values < mass[i + 1])),
+            (
+                (df.inj_msini.values >= msini_bin_edges[i])
+                & (df.inj_msini.values < msini_bin_edges[i + 1])
+            ),
             "mass_completeness_bins",
         ] = i
 
@@ -103,7 +120,9 @@ for k, f in enumerate(inj_rec_files):
 
 # compute completeness
 completeness = recoveries / injections
-print(completeness)
+print()
+print(injections[:, :, :-1])
+print(recoveries[:, :, :-1])
 
 # values in the 3d grid where there are 0 injections or 0 recoveries
 bad_mask = (completeness == 0) | (np.isnan(completeness))
@@ -124,12 +143,12 @@ for idx, i in enumerate(bad_idx[0]):
     iterp_here.append([i, bad_idx[1][idx], bad_idx[2][idx]])
 
 filled_in_points = scipy.interpolate.interpn(
-    (ecc[:-1], sma[:-1], mass[:-1]),
+    (ecc_bin_edges[:-1], sma_bin_edges[:-1], msini_bin_edges[:-1]),
     np.ma.array(completeness, mask=bad_mask),
     np.array(iterp_here),
     bounds_error=False,
-    fill_value=None,
-    method="nearest",  # TODO: this doesn't seem to produce great values for the one missing point but I think it is very unimportant to the final result.
+    fill_value=0.45,  # NOTE: this is a hack to fill one missing point with a value I think is ~correct. The lienar interp
+    method="linear",  # doesn't seem to produce great values for the one missing point but I think it is very unimportant to the final result.
 )
 
 completeness_model = copy.copy(completeness)
@@ -137,15 +156,17 @@ completeness_model[bad_mask] = filled_in_points
 
 # save the completeness model
 np.save(
-    "completeness_model/{}{}{}completeness".format(n_mass_bins, n_ecc_bins, n_sma_bins),
+    "completeness_model/{}{}{}completeness".format(
+        n_msini_bins, n_ecc_bins, n_sma_bins
+    ),
     completeness_model,
 )
 np.save(
-    "completeness_model/{}msini_bins".format(n_mass_bins),
-    mass,
+    "completeness_model/{}msini_bins".format(n_msini_bins),
+    msini_bin_edges,
 )
-np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc)
-np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)
+np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc_bin_edges)
+np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma_bin_edges)
 
 # completeness_model_medmass = completeness_model[:, :, -2]
 # completeness_model_himass = completeness_model[:, :, -1]
@@ -155,10 +176,10 @@ np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma)
 COMPLETENESS PLOT 
 """
 
-fig = plt.figure(figsize=(5 * n_mass_bins, 5))
-gs = fig.add_gridspec(1, n_mass_bins + 1, width_ratios=[20] * n_mass_bins + [1])
+fig = plt.figure(figsize=(5 * n_msini_bins, 5))
+gs = fig.add_gridspec(1, n_msini_bins + 1, width_ratios=[20] * n_msini_bins + [1])
 ax = []
-for i in range(n_mass_bins + 1):
+for i in range(n_msini_bins + 1):
     ax.append(fig.add_subplot(gs[0, i]))
 # ax0 = fig.add_subplot(gs[0, 0])
 # ax1 = fig.add_subplot(gs[0, 1])
@@ -169,17 +190,17 @@ for i in range(n_mass_bins + 1):
 for i, a in enumerate(ax[:-1]):
     a.set_title(
         "{:.1f} M$_{{\\oplus}}$ < Msini < {:.1f} M$_{{\\oplus}}$".format(
-            mass[i], mass[i + 1]
+            msini_bin_edges[i], msini_bin_edges[i + 1]
         )
     )
 
-for i in np.arange(len(mass) - 1):
+for i in np.arange(n_msini_bins):
     # ax[0].pcolormesh(
     #     sma, ecc, completeness_model[:, :, -2], shading="auto", vmin=0, vmax=1, cmap="Purples"
     # )
     pc = ax[i].pcolormesh(
-        sma,
-        ecc,
+        sma_bin_edges,
+        ecc_bin_edges,
         completeness_model[:, :, i],
         shading="auto",
         vmin=0,
@@ -193,7 +214,7 @@ cbar.set_label("completeness")
 
 for a in ax[:-1]:
     a.set_xscale("log")
-    a.set_xlim(sma[0], sma[-1])
+    a.set_xlim(sma_bin_edges[0], sma_bin_edges[-1])
     a.set_ylim(0, 1)
     a.set_xlabel("$a$ [au]")
 ax[0].set_ylabel("$e$")
@@ -217,8 +238,11 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
     ).values.flatten()
 
     ax_idx = None
-    for i in np.arange(len(mass) - 1):
-        if np.median(msini_post) > mass[i] and np.median(msini_post) < mass[i + 1]:
+    for i in np.arange(n_msini_bins):
+        if (
+            np.median(msini_post) > msini_bin_edges[i]
+            and np.median(msini_post) < msini_bin_edges[i + 1]
+        ):
             ax_idx = i
 
     if ax_idx is not None:
@@ -243,8 +267,8 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
             lw=2,
         )
 
-        for j, a in enumerate(sma[:-1]):
-            for k, e in enumerate(ecc[:-1]):
+        for j, a in enumerate(sma_bin_edges[:-1]):
+            for k, e in enumerate(ecc_bin_edges[:-1]):
 
                 ax[ax_idx].text(
                     a,
@@ -302,8 +326,10 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
 
 plt.tight_layout()
 
-savedir = f"plots/{n_mass_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
+fullmarg = "fullmarg_"  # ['fullmarg_', '']
 
+savedir = f"plots/{fullmarg}{n_msini_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
+print(savedir)
 if not os.path.exists(savedir):
     os.mkdir(savedir)
 

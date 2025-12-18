@@ -9,21 +9,25 @@ import pandas as pd
 from astropy import units as u, constants as cst
 import glob
 
+
 # read in MCMC samples
-n_mass_bins = 3
-n_sma_bins = 2
-n_e_bins = 4
+n_msini_bins = 3
+n_mass_bins = n_msini_bins
+n_sma_bins = 1
+n_e_bins = 5
 n_burn = 500  # number of burn-in steps I ran for the actual MCMC
 n_total = 500
 nwalkers = 100
+fullmarg = "fullmarg_"  # ["fullmarg_", ""]
+bdprior = "bdprior_"  # ["bdprior", ""]
 
 ndim = n_mass_bins * n_sma_bins * n_e_bins
-savedir = f"plots/{n_mass_bins}msini{n_sma_bins}sma{n_e_bins}e"
+savedir = f"plots/{fullmarg}{bdprior}{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 
 nstars_cps = 719  # total number of stars in the sample
 
 # choose fraction of burn-in steps to chop off for plots
-burnin = 0  # 0.75
+burnin = 0
 
 posteriors = np.loadtxt(
     f"{savedir}/epop_samples_burn{n_burn}_total{n_total}.csv", delimiter=","
@@ -35,51 +39,90 @@ n_steps_perchain = len(chains)
 
 chains = chains[int(burnin * n_steps_perchain) :, :, :]
 
-ecc_bins = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
-sma_bins = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
-msini_bins = np.load("completeness_model/{}msini_bins.npy".format(n_mass_bins))
+ecc_bin_edges = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
+sma_bin_edges = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
+msini_bin_egdes = np.load("completeness_model/{}msini_bins.npy".format(n_msini_bins))
+mass_bin_edges = msini_bin_egdes
 
-d_logmsini = np.log(msini_bins[1:]) - np.log(msini_bins[:-1])
-d_loga = np.log(sma_bins[1:]) - np.log(sma_bins[:-1])
+d_logmsini = np.log(msini_bin_egdes[1:]) - np.log(msini_bin_egdes[:-1])
+d_logmass = np.log(mass_bin_edges[1:]) - np.log(mass_bin_edges[:-1])
+d_loga = np.log(sma_bin_edges[1:]) - np.log(sma_bin_edges[:-1])
+assert np.all(np.isclose(d_loga, d_loga[0]))
+d_loga = d_loga[0]
 
-d_ecc = ecc_bins[1:] - ecc_bins[:-1]
+d_ecc = ecc_bin_edges[1:] - ecc_bin_edges[:-1]
 assert np.all(np.isclose(d_ecc, d_ecc[0]))
 d_ecc = d_ecc[0]
 
+chains_flattened = chains.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins))
+
+"""
+Plot total occurrence in the BD desert
+"""
+
+mass_idx = -1
+
+
+dn_de_dloga = (
+    chains_flattened[:, :, :, mass_idx] * d_logmass[mass_idx]
+)  # (n_samples, e, a, m)
+
+dn = 0
+for i in range(n_e_bins):
+    for j in range(n_sma_bins):
+        dn += dn_de_dloga[:, i, j] * d_ecc * d_loga
+bd_occurrence_rate = dn / nstars_cps
+
+plt.figure()
+plt.hist(bd_occurrence_rate, bins=50)
+
+print(np.quantile(bd_occurrence_rate, [0.16, 0.5, 0.84]))
+plt.savefig(f"{savedir}/bd_occurrence_rate_burn{n_burn}_total{n_total}.png", dpi=250)
+
+print(savedir)
 """
 compute significance of peak
 """
 
-chains_flattened = chains.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins))
 
+sma_bin_idx = 0
+mass_bin_idx = 1
 
-sma_bin_idx = 1
-msini_bin_idx = 2
-
-# NOTE: to directly compare absolute occurrence as below, the bin sizes need to be equal
+# NOTE: to directly compare absolute occurrence as below, the eccentricity bin sizes need to be equal
 # (luckily they are, but I'd need to correct for unequal bin sizes if they weren't)
 
-bin0_bin1_ratio = chains_flattened[:, 1, sma_bin_idx, msini_bin_idx]/chains_flattened[:, 0, sma_bin_idx, msini_bin_idx]
-bin1_bin2_ratio = chains_flattened[:, 1, sma_bin_idx, msini_bin_idx]/chains_flattened[:, 2, sma_bin_idx, msini_bin_idx]
+bin0_bin1_ratio = (
+    chains_flattened[:, 1, sma_bin_idx, mass_bin_idx]
+    / chains_flattened[:, 0, sma_bin_idx, mass_bin_idx]
+)
+bin1_bin2_ratio = (
+    chains_flattened[:, 1, sma_bin_idx, mass_bin_idx]
+    / chains_flattened[:, 2, sma_bin_idx, mass_bin_idx]
+)
 
-prob1  = (bin0_bin1_ratio > 1) # prob that bin 1 hist is greater than bin 0
-prob2 = (bin1_bin2_ratio > 1) # prob that bin 1 hist is greater than bin 2
+prob1 = bin0_bin1_ratio > 1  # prob that bin 1 hist is greater than bin 0
+prob2 = bin1_bin2_ratio > 1  # prob that bin 1 hist is greater than bin 2
 
 print(np.sum(prob1) / len(chains_flattened))
 print(np.sum(prob2) / len(chains_flattened))
 
 print(np.sum(prob2 & prob1) / len(chains_flattened))
 
-quants = np.quantile(bin0_bin1_ratio, [0.05,0.16, 0.036])
+quants = np.quantile(1 / bin0_bin1_ratio, [0.84, 0.95, 0.997])
 
-print(quants)
+# print(quants)
 
 plt.figure()
-plt.hist(bin0_bin1_ratio, bins=50, color='grey',alpha=0.5,range=(0,20), density=True)
-plt.axvline(1, color='purple')
-plt.axvline(quants[0], color='grey', ls='--')
-plt.axvline(quants[1], color='grey', ls='--')
-plt.xlabel('sub-Jov prob. / sup-Jov prob.')
+plt.hist(
+    1 / bin0_bin1_ratio, bins=50, color="grey", alpha=0.5, range=(0, 2), density=True
+)
+plt.axvline(1, color="purple")
+plt.axvline(quants[0], color="grey", ls="-.", label="1$\\sigma$")
+plt.axvline(quants[1], color="grey", ls="--", label="2$\\sigma$")
+plt.axvline(quants[2], color="grey", ls="-", label="3$\\sigma$")
+plt.legend()
+plt.ylabel("N$_{{\\mathrm{{samples}}}}$")
+plt.xlabel("$\\Gamma_{\\mathrm{{e}}\sim0.3}$ / $\\Gamma_{\\mathrm{{e}}\sim0.1}$")
 plt.savefig(f"{savedir}/relativeprob_burn{n_burn}_total{n_total}.png", dpi=250)
 
 
@@ -87,31 +130,32 @@ plt.savefig(f"{savedir}/relativeprob_burn{n_burn}_total{n_total}.png", dpi=250)
 Occurrence samples plot
 """
 
-fig = plt.figure(figsize=(5*n_mass_bins, 5))
-if n_mass_bins == 2:
-    width_ratios=(20, 20, 1)
-elif n_mass_bins == 3:
-    width_ratios=(20, 20, 20, 1)
-gs = fig.add_gridspec(1, n_mass_bins+1, width_ratios=width_ratios)
-ax0 = fig.add_subplot(gs[0, 0])
-ax1 = fig.add_subplot(gs[0, 1])
-ax2 = fig.add_subplot(gs[0, 2])
-ax_cbar = fig.add_subplot(gs[0, 3])
-ax = [ax0, ax1, ax2, ax_cbar]
+fig = plt.figure(figsize=(5 * n_mass_bins, 5))
 
+gs = fig.add_gridspec(1, n_mass_bins + 1, width_ratios=[20] * n_mass_bins + [1])
+ax = []
+for i in range(n_mass_bins):
+    ax_i = fig.add_subplot(gs[0, i])
+
+    ax.append(ax_i)
+ax_cbar = fig.add_subplot(gs[0, -1])
+ax.append(ax_cbar)
 
 for a in ax[:-1]:
     a.set_xscale("log")
-    a.set_xlim(sma_bins[0], sma_bins[-1])
-    a.set_ylim(ecc_bins[0], ecc_bins[-1])
+    a.set_xlim(sma_bin_edges[0], sma_bin_edges[-1])
+    a.set_ylim(ecc_bin_edges[0], ecc_bin_edges[-1])
     a.set_xlabel("$a$ [au]")
 ax[0].set_ylabel("$e$")
 ax[1].set_ylabel("$e$")
 
 for i, a in enumerate(ax[:-1]):
     a.set_title(
-        "{:.1f} M$_{{\\oplus}}$ < M < {:.1f} M$_{{\\oplus}}$".format(
-            msini_bins[i], msini_bins[i+1]
+        "{:0.0f} M$_{{\\oplus}}$ < M < {:0.0f} M$_{{\\oplus}}$ \n {:.1f} M$_{{\\mathrm{{J}}}}$ < M < {:.1f} M$_{{\\mathrm{{J}}}}$ ".format(
+            mass_bin_edges[i],
+            mass_bin_edges[i + 1],
+            (u.M_earth * mass_bin_edges[i]).to(u.M_jup).value,
+            (u.M_earth * mass_bin_edges[i + 1]).to(u.M_jup).value,
         )
     )
 
@@ -132,7 +176,10 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
 
     ax_idx = None
     for i in np.arange(n_mass_bins):
-        if msini_bins[i] < np.median(msini_post) and np.median(msini_post) < msini_bins[i+1]:
+        if (
+            mass_bin_edges[i] < np.median(msini_post)
+            and np.median(msini_post) < mass_bin_edges[i + 1]
+        ):
             ax_idx = i
 
     if ax_idx is not None:
@@ -152,47 +199,45 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
             [ecc_cis[1]],
             xerr=([sma_cis[1] - sma_cis[0]], [sma_cis[2] - sma_cis[1]]),
             yerr=([ecc_cis[1] - ecc_cis[0]], [ecc_cis[2] - ecc_cis[1]]),
-            color="white",
+            color="grey",
         )
 
 for i in np.arange(n_mass_bins):
 
     ax[i].tick_params(top=True, right=True, which="both", direction="in", length=3.5)
 
-    dn_dmsini_de_dloga = chains_flattened[:, :, :, i]
-    dn_de_dloga = dn_dmsini_de_dloga * d_logmsini[i]
-    
+    dn_dmass_de_dloga = chains_flattened[:, :, :, i]  # (n_samples, e, a, m)
+    dn_de_dloga = dn_dmass_de_dloga * d_logmass[i]
+
     dn = dn_de_dloga * d_ecc * d_loga
 
-    total_occurrence = (
-        np.sum(np.sum(dn, axis=1), axis=1)
-    )
+    total_occurrence = np.sum(np.sum(dn, axis=1), axis=1)
 
     # calculate the probability that a planet in this entire range of
     # msini/a lives in a specific e/sma/msini box
     d_prob = np.zeros((len(chains_flattened), n_e_bins, n_sma_bins))
     for j in range(n_e_bins):
         for k in range(n_sma_bins):
-            d_prob[:,j,k] = dn[:,j,k] / total_occurrence * 100
-    
+            d_prob[:, j, k] = dn[:, j, k] / total_occurrence * 100
+
     # sanity check: all the probabilities should add up to 100 for a given posterior sample
     assert np.isclose(np.max(np.sum(np.sum(d_prob, axis=1), axis=1)), 100)
-    assert np.isclose(np.min(np.sum(np.sum(d_prob, axis=1), axis=1)),100)
+    assert np.isclose(np.min(np.sum(np.sum(d_prob, axis=1), axis=1)), 100)
 
     medians = np.median(d_prob, axis=0)
 
     pc = ax[i].pcolormesh(
-        sma_bins,
-        ecc_bins,
+        sma_bin_edges,
+        ecc_bin_edges,
         medians,
         shading="auto",
         cmap="Purples",
         vmin=0,
-        vmax=25,
+        vmax=75,
         edgecolor="white",
     )
-    for j, a in enumerate(sma_bins[:-1]):
-        for k, e in enumerate(ecc_bins[:-1]):
+    for j, a in enumerate(sma_bin_edges[:-1]):
+        for k, e in enumerate(ecc_bin_edges[:-1]):
 
             quantiles = np.quantile(d_prob[:, k, j], [0.16, 0.5, 0.84])
 
@@ -218,9 +263,9 @@ plt.savefig(f"{savedir}/samples_burn{n_burn}_total{n_total}.png", dpi=250)
 Marginalized 1d eccentricity plot for low vs high masses in a single sma bins
 """
 
-fig, ax = plt.subplots(1, n_mass_bins, figsize=(5*n_mass_bins, 5))
+fig, ax = plt.subplots(1, n_mass_bins, figsize=(5 * n_mass_bins, 5))
 
-sma_bin_idx = 1
+sma_bin_idx = 0
 
 # integrate over eccentricity and msini to get dN/d(lna)
 n2plot = 100
@@ -228,20 +273,20 @@ idx2plot = np.random.choice(
     np.arange(len(chains_flattened[:, 0, 0, 0])),
     n2plot,
 )
-colors = [ "rebeccapurple", "grey","teal"]
-fmts = ["o", "^", "*"]
+colors = ["rebeccapurple", "grey", "teal", "black"]
+fmts = ["o", "^", "*", "*"]
 for i in range(n_mass_bins):
 
-    dn_dmsini_de_dloga = chains_flattened[:, :, sma_bin_idx, i]  # (n_steps, n_e)
-    dn = dn_dmsini_de_dloga * d_logmsini[i] * d_ecc * d_loga[sma_bin_idx]
+    dn_dmass_de_dloga = chains_flattened[:, :, sma_bin_idx, i]  # (n_steps, n_e)
+    dn = dn_dmass_de_dloga * d_logmass[i] * d_ecc * d_loga
     d_occurrence = dn / nstars_cps * 100
 
-    for j, a in enumerate(ecc_bins[:-1]):
+    for j, a in enumerate(ecc_bin_edges[:-1]):
 
         # each of these is dN/dMsini * de * dloga
         for k in range(n2plot):
             ax[i].plot(
-                [ecc_bins[j], ecc_bins[j + 1]],
+                [ecc_bin_edges[j], ecc_bin_edges[j + 1]],
                 np.ones(2) * d_occurrence[idx2plot[k], j],
                 color=colors[i],
                 alpha=0.1,
@@ -249,42 +294,55 @@ for i in range(n_mass_bins):
 
         quantiles = np.quantile(d_occurrence[:, j], [0.16, 0.5, 0.84])
         ax[i].errorbar(
-            [0.5 * (ecc_bins[j] + ecc_bins[j + 1])],
+            [0.5 * (ecc_bin_edges[j] + ecc_bin_edges[j + 1])],
             [quantiles[1]],
             [[quantiles[1] - quantiles[0]], [quantiles[2] - quantiles[1]]],
             color=colors[i],
             fmt=fmts[i],
         )
 
-ax[1].set_ylabel("N$_{{\\mathrm{{pl}}}}$ / 100 stars")
-ax[1].text(0,7.6, "a range: {:.1f}au < a < {:.1f}au".format(sma_bins[sma_bin_idx], sma_bins[sma_bin_idx+1]))
+ax[0].set_ylabel("N$_{{\\mathrm{{pl}}}}$ / 100 stars")
+ax[0].text(
+    0,
+    14,
+    "a range: {:.1f}au < a < {:.1f}au".format(
+        sma_bin_edges[sma_bin_idx], sma_bin_edges[sma_bin_idx + 1]
+    ),
+)
 for i, a in enumerate(ax):
     a.set_xlabel("ecc")
-    a.set_title("{:.1f} M$_{{\\oplus}}$ < M < {:.1f} M$_{{\\oplus}}$".format(
-                msini_bins[i], msini_bins[i+1]
-            )
-)
-    a.set_ylim(0,8)
+    a.set_title(
+        "{:0.0f} M$_{{\\oplus}}$ < M < {:0.0f} M$_{{\\oplus}}$ \n {:.1f} M$_{{\\mathrm{{J}}}}$ < M < {:.1f} M$_{{\\mathrm{{J}}}}$ ".format(
+            mass_bin_edges[i],
+            mass_bin_edges[i + 1],
+            (u.M_earth * mass_bin_edges[i]).to(u.M_jup).value,
+            (u.M_earth * mass_bin_edges[i + 1]).to(u.M_jup).value,
+        )
+    )
+    a.set_ylim(0, 15)
 plt.savefig(
-    f"{savedir}/ecc_marginalized_samples_burn{n_burn}_total{n_total}_smaidx{sma_bin_idx}.png", dpi=250
+    f"{savedir}/ecc_marginalized_samples_burn{n_burn}_total{n_total}_smaidx{sma_bin_idx}.png",
+    dpi=250,
 )
 
-"""
-corner plot
-"""
+# """
+# corner plot
+# """
 
-# corner.corner(chains)
-# plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
+# # corner.corner(chains_flattened)
+# # plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
 
 """
 trend plot
 """
 
-# fig, ax = plt.subplots(ndim, 1, figsize=(5, 30), sharex=True)
-# plt.subplots_adjust(hspace=0)
+fig, ax = plt.subplots(ndim, 1, figsize=(5, 30), sharex=True)
+plt.subplots_adjust(hspace=0)
 
-# for i in range(nwalkers):
-#     for j in range(ndim):
-#         ax[j].plot(chains[:, i, j], alpha=0.05, color="k")
+for i in range(nwalkers):
+    for j in range(ndim):
+        ax[j].plot(chains[:, i, j], alpha=0.05, color="k")
 
-# plt.savefig(f"{savedir}/trend_burn{n_burn}_total{n_total}.png", dpi=250)
+plt.savefig(f"{savedir}/trend_burn{n_burn}_total{n_total}.png", dpi=250)
+
+print(savedir)

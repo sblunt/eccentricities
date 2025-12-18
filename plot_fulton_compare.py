@@ -5,51 +5,72 @@ import numpy as np
 Fulton+ 23 reproduction plot
 Compare with https://content.cld.iop.org/journals/0067-0049/255/1/14/revision1/apjsabfcc1f5_hr.jpg
 """
-n_mass_bins = 2
+n_mass_bins = 3
 n_e_bins = 1
-n_sma_bins=6
+n_sma_bins = 6
 
 nwalkers = 100
 ndim = n_mass_bins * n_sma_bins * n_e_bins
 
-chains_msini = np.loadtxt('/home/sblunt/eccentricities/plots/2msini6sma1e_msini/epop_samples_burn500_total500.csv', delimiter=",")
-chains_msini = chains_msini.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins))
+chains_msini = np.loadtxt(
+    "/home/sblunt/eccentricities/plots/2msini6sma1e_msini/epop_samples_burn500_total500.csv",
+    delimiter=",",
+)
+chains_msini = chains_msini.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins - 1))
 
-chains_mass = np.loadtxt('/home/sblunt/eccentricities/plots/2msini6sma1e/epop_samples_burn500_total500.csv', delimiter=",")
+chains_mass = np.loadtxt(
+    "/home/sblunt/eccentricities/plots/fullmarg_bdprior_3msini6sma1e/epop_samples_burn500_total500.csv",
+    delimiter=",",
+)
 chains_mass = chains_mass.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins))
 
 
+ecc_bins = np.load("completeness_model/fultoncomp{}ecc_bins.npy".format(n_e_bins))
+sma_bins = np.load("completeness_model/fultoncomp{}sma_bins.npy".format(n_sma_bins))
+msini_bins = np.load(
+    "completeness_model/fultoncomp{}msini_bins.npy".format(n_mass_bins)
+)
 
-ecc_bins = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
-sma_bins = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
-msini_bins = np.load("completeness_model/{}msini_bins.npy".format(n_mass_bins))
+print(msini_bins)
 
-d_logmsini = np.log(msini_bins[1:]) - np.log(msini_bins[:-1])
+# check that the bins are right (I changed them around a bunch in testing
+# so added this for my own sanity)
+assert np.array_equal(msini_bins[0:-1], np.array([30, 300, 6_000]))
+
+d_logm = np.log(msini_bins[1:]) - np.log(
+    msini_bins[:-1]
+)  # NOTE: msini bins and mass bins are assumed to be same
 d_loga = np.log(sma_bins[1:]) - np.log(sma_bins[:-1])
 d_ecc = ecc_bins[1:] - ecc_bins[:-1]
 
+print(sma_bins)
+
 nstars_cps = 719  # total number of stars in the sample
 
-fig, ax = plt.subplots( 1,2, figsize=(10, 5))
+fig, ax = plt.subplots(1, 2, figsize=(10, 5))
 
 # integrate over eccentricity and msini to get dN/d(lna)
 n2plot = 100
 
-linewidths = [5,1]
-alphas=[0.2,1]
+linewidths = [1, 5, 10]
+alphas = [1, 0.2, 0.1]
 
 for chain_idx, chains in enumerate([chains_msini, chains_mass]):
     idx2plot = np.random.choice(
         np.arange(len(chains[:, 0, 0, 0])),
         n2plot,
     )
-    colors = ["k", "rebeccapurple"]
-    fmts = ["o", "^"]
+    colors = ["k", "rebeccapurple", "k"]
+    fmts = ["o", "^", "*"]
     for i in range(n_mass_bins):
+        if i == n_mass_bins - 1 and chain_idx == 0:
+            continue
 
-        dn_dmsini_de_dloga = chains[:, :, :, i]  # (n_steps, n_e, n_sma)
+        dn_dlogm_de_dloga = chains[:, :, :, i]  # (n_steps, n_e, n_sma)
 
-        dn_de_dloga = dn_dmsini_de_dloga * d_logmsini[i]
+        dn_de_dloga = (
+            dn_dlogm_de_dloga * d_logm[i]
+        )  # NOTE: logm is either logmsini or logmass here
         d_occurrence_de_dloga = dn_de_dloga / nstars_cps * 100
 
         d_occurrence_dloga = np.sum(d_occurrence_de_dloga * d_ecc, axis=1)
@@ -59,11 +80,11 @@ for chain_idx, chains in enumerate([chains_msini, chains_mass]):
         for j, a in enumerate(sma_bins[:-1]):
 
             if chain_idx == 0:
-                mass_label = "M$\sin{i}$"
-                title='no incl. marginalization'
+                mass_label = "M$\\sin{i}$"
+                title = "no inclination marginalization"
             else:
                 mass_label = "M"
-                title='with incl. marginalization'
+                title = "with inclination marginalization"
 
             label = None
             if j == 0 and i == 0:
@@ -73,6 +94,10 @@ for chain_idx, chains in enumerate([chains_msini, chains_mass]):
             elif j == 0 and i == 1:
                 label = "{} M$_{{\\oplus}}$ < {} < {} M$_{{\\oplus}}$".format(
                     int(msini_bins[1]), mass_label, int(msini_bins[2])
+                )
+            elif j == 0 and i == 2:
+                label = "{} M$_{{\\oplus}}$ < {} < {} M$_{{\\oplus}}$".format(
+                    int(msini_bins[2]), mass_label, int(msini_bins[3])
                 )
 
             # for k in range(n2plot):
@@ -90,14 +115,19 @@ for chain_idx, chains in enumerate([chains_msini, chains_mass]):
                 [[quantiles[1] - quantiles[0]], [quantiles[2] - quantiles[1]]],
                 color=colors[i],
                 fmt=fmts[i],
-                label=label,elinewidth=linewidths[i], alpha=alphas[i]
+                label=label,
+                elinewidth=linewidths[i],
+                alpha=alphas[i],
             )
 
     ax[chain_idx].set_title(title)
     ax[chain_idx].set_xscale("log")
     ax[chain_idx].set_xlabel("$a$ [au]")
-    ax[chain_idx].set_ylim(0, 14)
+    # ax[chain_idx].set_ylim(0, 14)
     ax[chain_idx].legend()
+
+for a in ax:
+    a.set_ylim(0, 15)
 
 ax[0].set_ylabel("N$_{{\\mathrm{{pl}}}}$ / 100 stars / $\\Delta$log$_e$(a)")
 
