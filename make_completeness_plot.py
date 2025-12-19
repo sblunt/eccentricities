@@ -135,8 +135,7 @@ filled_in_points = scipy.interpolate.interpn(
     np.ma.array(completeness, mask=bad_mask),
     np.array(iterp_here),
     bounds_error=False,
-    fill_value=0.45,  # NOTE: this is a hack to fill one missing point with a value I think is ~correct. The lienar interp
-    method="linear",  # doesn't seem to produce great values for the one missing point but I think it is very unimportant to the final result.
+    method="linear",
 )
 
 completeness_model = copy.copy(completeness)
