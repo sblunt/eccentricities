@@ -15,32 +15,29 @@ import os
 n_ecc_bins = 5
 n_sma_bins = 1
 n_msini_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
+path_to_clsi = f"{os.path.expanduser('~')}/Documents/Github"  # where I stored the clsi Github repo with inj-rec tests
 
-# NOTE: SAMPLE SELECTION DEFINED HERE
+# NOTE: BIN BOUNDARIES DEFINED HERE
 ecc_bin_edges = np.linspace(0, 1, n_ecc_bins + 1)
 
 # these sma/msini limits overlap with BJ's bins
 sma_bin_edges = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
 
+"""
+# this is what BJ uses (plus the bin I added for the brown dwarfs). I don't see a peak with these bins,
+# (which leads me to believe the peak occurs at higher masses)
 
-# mass = np.array([30, 300, 6000])  # [Mearth]
-# mass = np.logspace(np.log10(30), np.log10(6000), n_mass_bins + 1)  # [Mearth]
-# msini = np.logspace(np.log10(30), np.log10(6_000), n_mass_bins)
-# mass = np.append(mass, 300_000)
-# msini_bin_edges = np.append(
-#     np.logspace(np.log10(30), np.log10(6_000), n_msini_bins), 300_000
-# )
+msini_bin_edges = np.array(
+    [30, 300, 6_000, 30_000]
+)  
+"""
 
-msini_bin_edges = np.array([30, 1_000, 6_000, 30_000])  # this is what I will use
-# msini_bin_edges = np.array(
-#     [30, 300, 6_000, 30_000]
-# )  # this is what BJ uses (plus the bin for bds)
-
+msini_bin_edges = np.array([30, 1_000, 6_000, 30_000])
 
 recoveries = np.zeros((n_ecc_bins, n_sma_bins, n_msini_bins))
 injections = np.zeros((n_ecc_bins, n_sma_bins, n_msini_bins))
 
-inj_rec_files = glob.glob("/home/sblunt/CLSI/completeness/recoveries_all/*.csv")
+inj_rec_files = glob.glob(f"{path_to_clsi}/CLSI/completeness/recoveries_all/*.csv")
 for k, f in enumerate(inj_rec_files):
     print(f"Reading {k}/{len(inj_rec_files)}", end="\r")
     df = pd.read_csv(f)
@@ -49,9 +46,6 @@ for k, f in enumerate(inj_rec_files):
     df["sma_completeness_bins"] = np.nan
     df["mass_completeness_bins"] = np.nan
     for i in np.arange(n_ecc_bins):
-        # df["ecc_completeness_bins"][
-        #     ((df.inj_e.values >= ecc[i]) & (df.inj_e.values < ecc[i + 1]))
-        # ] = i
         df.loc[
             (
                 (df.inj_e.values >= ecc_bin_edges[i])
@@ -60,9 +54,7 @@ for k, f in enumerate(inj_rec_files):
             "ecc_completeness_bins",
         ] = i
     for i in np.arange(n_sma_bins):
-        # df["sma_completeness_bins"][
-        #     ((df.inj_au.values >= sma[i]) & (df.inj_au.values < sma[i + 1]))
-        # ] = i
+
         df.loc[
             (
                 (df.inj_au.values >= sma_bin_edges[i])
@@ -72,9 +64,6 @@ for k, f in enumerate(inj_rec_files):
         ] = i
 
     for i in np.arange(n_msini_bins):
-        # df["mass_completeness_bins"][
-        #     ((df.inj_msini.values >= mass[i]) & (df.inj_msini.values < mass[i + 1]))
-        # ] = i
         df.loc[
             (
                 (df.inj_msini.values >= msini_bin_edges[i])
@@ -83,7 +72,6 @@ for k, f in enumerate(inj_rec_files):
             "mass_completeness_bins",
         ] = i
 
-    # print(np.max((df.inj_msini.values * u.M_earth / u.M_sun).to("")))
     recovered_planets = df[df.recovered.values]
     unrecovered_planets = df[~df.recovered.values]
 
@@ -121,14 +109,14 @@ for k, f in enumerate(inj_rec_files):
 # compute completeness
 completeness = recoveries / injections
 print()
-print(injections[:, :, :-1])
-print(recoveries[:, :, :-1])
+print(f"Injections in each bin: {injections[:, :, :-1]}")
+print(f"Recoveries in each bin: {recoveries[:, :, :-1]}")
 
 # values in the 3d grid where there are 0 injections or 0 recoveries
 bad_mask = (completeness == 0) | (np.isnan(completeness))
 
 print(
-    "Need to interpolate {} values ({:.2f}%)".format(
+    "Interpolated {} values ({:.2f}%)".format(
         np.sum(bad_mask), np.sum(bad_mask) / len(completeness.flatten()) * 100
     )
 )
@@ -181,11 +169,6 @@ gs = fig.add_gridspec(1, n_msini_bins + 1, width_ratios=[20] * n_msini_bins + [1
 ax = []
 for i in range(n_msini_bins + 1):
     ax.append(fig.add_subplot(gs[0, i]))
-# ax0 = fig.add_subplot(gs[0, 0])
-# ax1 = fig.add_subplot(gs[0, 1])
-# ax2 = fig.add_subplot(gs[0, 2])
-# ax3 = fig.add_subplot(gs[0, 3])
-# ax = [ax0, ax1, ax2, ax3]
 
 for i, a in enumerate(ax[:-1]):
     a.set_title(
@@ -195,9 +178,6 @@ for i, a in enumerate(ax[:-1]):
     )
 
 for i in np.arange(n_msini_bins):
-    # ax[0].pcolormesh(
-    #     sma, ecc, completeness_model[:, :, -2], shading="auto", vmin=0, vmax=1, cmap="Purples"
-    # )
     pc = ax[i].pcolormesh(
         sma_bin_edges,
         ecc_bin_edges,
@@ -279,50 +259,54 @@ for post_path in glob.glob(f"lee_posteriors/{origin}/ecc_*.csv"):
                     bbox=dict(facecolor="white", edgecolor="black", alpha=0.75),
                 )
 
-# overplot the published limits from Lee's paper
-# lowmass_eccs = []
-# lowmass_smas = []
-# highmass_eccs = []
-# highmass_smas = []
-# lowmass_ecc_errors = []
-# highmass_ecc_errors = []
-# legacy_planets = pd.read_csv(
-#     "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
-# )
-# for i, row in legacy_planets.iterrows():
+"""
+# overplot the published limits from Lee's paper (if you want to see how little the importance resampling matters,
+# and get really dizzy in the process)
 
-#     # remove false positives
-#     if row.status not in ["A", "R", "N"]:
+lowmass_eccs = []
+lowmass_smas = []
+highmass_eccs = []
+highmass_smas = []
+lowmass_ecc_errors = []
+highmass_ecc_errors = []
+legacy_planets = pd.read_csv(
+    "/home/sblunt/CLSI/legacy_tables/planet_list.csv", index_col=0, comment="#"
+)
+for i, row in legacy_planets.iterrows():
 
-#         if (row.mass_med * u.M_jup / u.M_earth).to("") > mass[-2] and (
-#             row.mass_med * u.M_jup / u.M_earth
-#         ).to("") < mass[-1]:
-#             ax_idx = 1
-#             highmass_eccs.append(row.e_med)
-#             highmass_smas.append(row.axis_med)
-#             highmass_ecc_errors.append(
-#                 np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
-#             )
+    # remove false positives
+    if row.status not in ["A", "R", "N"]:
 
-#         elif (row.mass_med * u.M_jup / u.M_earth).to("") < mass[-2] and (
-#             row.mass_med * u.M_jup / u.M_earth
-#         ).to("") > mass[-3]:
-#             ax_idx = 0
-#             lowmass_eccs.append(row.e_med)
-#             lowmass_smas.append(row.axis_med)
-#             lowmass_ecc_errors.append(
-#                 np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
-#             )
+        if (row.mass_med * u.M_jup / u.M_earth).to("") > mass[-2] and (
+            row.mass_med * u.M_jup / u.M_earth
+        ).to("") < mass[-1]:
+            ax_idx = 1
+            highmass_eccs.append(row.e_med)
+            highmass_smas.append(row.axis_med)
+            highmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
 
-# ax[ax_idx].errorbar(
-#     [row.axis_med],
-#     [row.e_med],
-#     xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
-#     yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
-#     color="k",
-#     lw=0.5,
-#     alpha=1,
-# )
+        elif (row.mass_med * u.M_jup / u.M_earth).to("") < mass[-2] and (
+            row.mass_med * u.M_jup / u.M_earth
+        ).to("") > mass[-3]:
+            ax_idx = 0
+            lowmass_eccs.append(row.e_med)
+            lowmass_smas.append(row.axis_med)
+            lowmass_ecc_errors.append(
+                np.max([row.e_plus - row.e_med, row.e_med - row.e_minus])
+            )
+
+ax[ax_idx].errorbar(
+    [row.axis_med],
+    [row.e_med],
+    xerr=([row.axis_med - row.axis_minus], [row.axis_plus - row.axis_med]),
+    yerr=([row.e_med - row.e_minus], [row.e_plus - row.e_med]),
+    color="k",
+    lw=0.5,
+    alpha=1,
+)
+"""
 
 plt.tight_layout()
 
