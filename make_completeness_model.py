@@ -155,10 +155,6 @@ np.save(
 np.save("completeness_model/{}ecc_bins".format(n_ecc_bins), ecc_bin_edges)
 np.save("completeness_model/{}sma_bins".format(n_sma_bins), sma_bin_edges)
 
-# completeness_model_medmass = completeness_model[:, :, -2]
-# completeness_model_himass = completeness_model[:, :, -1]
-
-
 """
 COMPLETENESS PLOT 
 """
@@ -309,10 +305,8 @@ ax[ax_idx].errorbar(
 
 plt.tight_layout()
 
-fullmarg = "fullmarg_"  # ['fullmarg_', '']
-
-savedir = f"plots/{fullmarg}{n_msini_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
-print(savedir)
+savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_ecc_bins}e"
+print(f"Completeness model plot saved to: {savedir}.")
 if not os.path.exists(savedir):
     os.mkdir(savedir)
 

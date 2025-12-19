@@ -3,6 +3,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 
+"""
+Chill plot to explore the sample
+"""
+
 mass_bin_edges = np.array([30, 600, 6_000, 300_000])
 # 600 Mearth = 1.9 Mjup, 6_000 Mearth= 19 Mjup, 300_000 Mearth = 0.9 Msun
 n_mass_bins = len(mass_bin_edges) - 1
