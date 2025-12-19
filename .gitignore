@@ -2,9 +2,12 @@
 lee_posteriors/*
 brendan_posteriors/*
 plots/*
-OLD/*
+*.npy
 
-!OLD/*.py
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
 # ignore the script to grab Bowler+ 2020 posteriors
 get_files.py
