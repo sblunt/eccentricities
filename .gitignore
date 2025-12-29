@@ -1,8 +1,9 @@
-# ignore big posterior files & plots
+# ignore big posterior files, plots, and old stuff
 lee_posteriors/*
 brendan_posteriors/*
 plots/*
 *.npy
+OLD/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
