@@ -25,7 +25,7 @@ nwalkers = 100
 fullmarg = 'fullmarg_' # 'fullmarg_' or '' depending on model run
  
 ndim = n_mass_bins * n_sma_bins * n_e_bins
-savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
+savedir = f"../plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 
 nstars_cps = 719  # total number of stars in the sample
 
@@ -42,9 +42,9 @@ n_steps_perchain = len(chains)
 
 chains = chains[int(burnin * n_steps_perchain) :, :, :]
 
-ecc_bin_edges = np.load("completeness_model/{}ecc_bins.npy".format(n_e_bins))
-sma_bin_edges = np.load("completeness_model/{}sma_bins.npy".format(n_sma_bins))
-msini_bin_egdes = np.load("completeness_model/{}msini_bins.npy".format(n_msini_bins))
+ecc_bin_edges = np.load("../completeness_model/{}ecc_bins.npy".format(n_e_bins))
+sma_bin_edges = np.load("../completeness_model/{}sma_bins.npy".format(n_sma_bins))
+msini_bin_egdes = np.load("../completeness_model/{}msini_bins.npy".format(n_msini_bins))
 mass_bin_edges = msini_bin_egdes
 
 d_logmsini = np.log(msini_bin_egdes[1:]) - np.log(msini_bin_egdes[:-1])
@@ -162,7 +162,7 @@ for i, a in enumerate(ax[:-1]):
         )
     )
 
-for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
+for post_path in glob.glob("../lee_posteriors/resampled/ecc_*.csv"):
 
     ecc_post = pd.read_csv(post_path).values.flatten()
     post_len = len(ecc_post)
@@ -171,10 +171,10 @@ for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
     pl_num = post_path.split("/")[-1].split("_")[2].split(".")[0]
 
     msini_post = pd.read_csv(
-        f"lee_posteriors/resampled/msini_{st_name}_{pl_num}.csv"
+        f"../lee_posteriors/resampled/msini_{st_name}_{pl_num}.csv"
     ).values.flatten()
     sma_post = pd.read_csv(
-        f"lee_posteriors/resampled/sma_{st_name}_{pl_num}.csv"
+        f"../lee_posteriors/resampled/sma_{st_name}_{pl_num}.csv"
     ).values.flatten()
 
     ax_idx = None

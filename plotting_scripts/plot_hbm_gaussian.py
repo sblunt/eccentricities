@@ -21,7 +21,7 @@ nwalkers = 100
 
 
 ndim = 3
-savedir = f"plots/{n_mass_bins}msini{n_sma_bins}sma{n_e_bins}e"
+savedir = f"../plots/{n_mass_bins}msini{n_sma_bins}sma{n_e_bins}e"
 
 posteriors = np.loadtxt(
     "{}/gaussian_samples_burn{}_total{}_massidx{}_smaidx{}.csv".format(
@@ -113,11 +113,11 @@ for i in range(len(ax)):
     )
     ax[i].set_ylabel("relative prob.")
 
-ax[0].axvline(0.3, color="k", ls="--")
+ax[0].axvline(0.275, color="k", ls="--")
 ax[0].set_xlabel("$\\mu$")
 ax[1].set_xlabel("$\\sigma$")
 ax[0].legend()
 ax[0].set_xlim(0,1)
 ax[1].set_xlim(0.1,1.5)
 
-plt.savefig("plots/gaussian_comp.png", dpi=250)
+plt.savefig("../plots/gaussian_comp.png", dpi=250)
