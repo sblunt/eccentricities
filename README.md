@@ -1,5 +1,7 @@
 Welcome to the collection of code I wrote to perform the analysis in Blunt et al (2026): Evidence for a Peak at ~0.3 in the Eccentricity Distribution of Typical Super-Jovian Exoplanets. Please feel free to raise an issue if you spot a bug or have a question.
 
+[![DOI](https://zenodo.org/badge/805554790.svg)](https://doi.org/10.5281/zenodo.18089156)
+
 Here's a quick map for those looking to recreate the analysis:
 
 1. I'm starting from the assumption that you have access to the California Legacy individual fit posteriors (if you don't, reach out to BJ Fulton and he can share with you).
