@@ -15,7 +15,7 @@ import os
 n_ecc_bins = 5
 n_sma_bins = 1
 n_msini_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+ 19]
-path_to_clsi = f"{os.path.expanduser('~')}/Documents/Github"  # where I stored the clsi Github repo with inj-rec tests
+path_to_clsi = f"{os.path.expanduser('~')}"  # where I stored the clsi Github repo with inj-rec tests
 
 # NOTE: BIN BOUNDARIES DEFINED HERE
 ecc_bin_edges = np.linspace(0, 1, n_ecc_bins + 1)
@@ -24,8 +24,9 @@ ecc_bin_edges = np.linspace(0, 1, n_ecc_bins + 1)
 sma_bin_edges = np.logspace(np.log10(0.10533575), np.log10(4.55973325), n_sma_bins + 1)
 
 """
-# this is what BJ uses (plus the bin I added for the brown dwarfs). I don't see a peak with these bins,
-# (which leads me to believe the peak occurs at higher masses)
+# this is what BJ uses (plus the bin I added for the brown dwarfs). I don't see a peak with these bins
+# (which leads me to believe the peak occurs at higher masses). I didn't explore
+# this in a huge amount of detail though (future work!)
 
 msini_bin_edges = np.array(
     [30, 300, 6_000, 30_000]
@@ -142,6 +143,8 @@ completeness_model = copy.copy(completeness)
 completeness_model[bad_mask] = filled_in_points
 
 # save the completeness model
+if not os.path.exists("completeness_model"):
+    os.mkdir("completeness_model")
 np.save(
     "completeness_model/{}{}{}completeness".format(
         n_msini_bins, n_ecc_bins, n_sma_bins
