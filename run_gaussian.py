@@ -112,7 +112,7 @@ class HierGaussian(object):
             return -np.inf
         if mu > 1:
             return -np.inf
-        if sigma > 1.5:
+        if sigma > 1:
             return -np.inf
         if A > 100:
             return -np.inf

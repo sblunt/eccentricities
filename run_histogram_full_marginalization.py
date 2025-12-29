@@ -69,14 +69,6 @@ class HierHistogram(object):
         self.completeness_labels = np.nan * np.ones(
             (self.post_len, 3, self.n_posteriors), dtype=int
         )
-        # self.mass_labels = np.nan * np.ones(
-        #     (self.post_len, self.n_posteriors), dtype=int
-        # )
-
-        # self.cosi_limits = np.nan * np.ones(
-        #     (self.post_len, self.n_posteriors, self.n_mass_bins + 1),
-        #     dtype=int,
-        # )
 
         for k in range(self.n_posteriors):
 
@@ -95,21 +87,6 @@ class HierHistogram(object):
                     self.msini_posteriors[k] < self.msini_bin_edges[i + 1]
                 )
                 self.completeness_labels[msini_mask, 2, k] = i
-
-            # for i in range(len(self.mass_bins)):
-            #     ### THIS ASSUMES UNIFORM COSI ONLY IN SINGLE MASS BIN
-            #     # compute the inclination limits that correspond to the boundaries of all larger mass bins
-            #     inc_limits = np.arcsin(self.msini_posteriors[k] / self.mass_bins[i])
-
-            #     cosi_limits_i = np.cos(inc_limits)
-
-            #     self.cosi_limits[:, k, i] = cosi_limits_i
-
-            # for j in np.arange(self.post_len):
-            #     cosi_limits_i = self.cosi_limits[j, k, :]
-            #     if np.isnan(self.cosi_limits[j, k, :]).any():
-            #         cosi_limits_i[np.max(np.where(np.isnan(cosi_limits_i))[0])] = 0
-            #     self.cosi_limits[j, k, :] = cosi_limits_i
 
     def calc_likelihood(self, x):
         """
@@ -190,13 +167,6 @@ class HierHistogram(object):
                         system_sums[i] += system_sum_j
 
         log_likelihood = np.sum(np.nan_to_num(np.log(system_sums), neginf=0.0))
-        # print(log_likelihood)
-
-        # add in exponential part of HBM likelihood
-        # this is (negative) the expected number of planets detected by the survey; good sanity check
-        ## OLD:
-        # norm_constant = -np.sum(self.completeness * histogram_heights * self.bin_widths)
-        #######
 
         @lru_cache
         def _integral(x, A):
@@ -207,9 +177,6 @@ class HierHistogram(object):
             if x - A > 0:  # if msini < mass
                 return 0
             else:
-                # return 0.5 * x * np.sqrt(1 - x**2) - np.arctan(
-                #     np.sqrt(1 - x**2) / (x + 1)
-                # )
 
                 const = np.sqrt(1 - np.exp(2 * (x - A)))
 
@@ -250,7 +217,6 @@ class HierHistogram(object):
                             * histogram_heights[
                                 ecc_idx, sma_idx, mass_idx
                             ]  # NOTE: could vectorize this for speed boost
-                            # * self.msini_bin_widths[msini_bin_idx] TODO: these made units incorrect
                             * self.ecc_bin_widths[ecc_idx]
                             * self.sma_bin_widths[sma_idx]
                         )
@@ -292,7 +258,7 @@ if __name__ == "__main__":
     ecc_posteriors = []
     msini_posteriors = []
     sma_posteriors = []
-    n_samples = 50  # 999  # according to Hogg paper, you can go as low as 50 samples per posterior and get reasonable results
+    n_samples = 50  # 999  # according to Hogg+ '10 paper, you can go as low as 50 samples per posterior and get reasonable results
 
     for post_path in glob.glob("lee_posteriors/resampled/ecc_*.csv"):
 
@@ -350,115 +316,3 @@ if __name__ == "__main__":
         hbm_samples,
         delimiter=",",
     )
-
-    ### Original (incorrect) formalism for inc marginalization, keeping here for now:
-    # THIS ASSUMES UNIFORM COSI ACROSS ALL BINS
-    # mass_idx = self.mass_labels[j, i]
-    ###
-
-    # ### THIS ASSUMES UNIFORM COSI PER MASS BIN
-    # msini = self.msini_posteriors[i][j]
-
-    # if not np.isnan(ecc_idx + sma_idx) and msini > self.msini_bins[0]:
-
-    #     ecc_idx = int(ecc_idx)
-    #     sma_idx = int(sma_idx)
-
-    #     # we're assuming here occurrence in bin greater than highest mass bin is 0
-    #     occurrences_to_draw_from = np.append(
-    #         histogram_heights[
-    #             ecc_idx, sma_idx, self.msini_bins[1:] > msini
-    #         ],
-    #         0,
-    #     )
-
-    #     cosi_limits_i = np.append(
-    #         np.append(
-    #             0, self.cosi_limits[j, i, :][self.cosi_limits[j, i, :] > 0]
-    #         ),
-    #         1,  # cosi_limits has shape (post_len, n_posteriors, n_msini_bins+1)
-    #     )
-
-    #     # draw cosi from a random step-uniform distribution
-    #     random_cosis = cached_rvhist(
-    #         occurrences_to_draw_from,
-    #         cosi_limits_i,
-    #     )
-
-    #     random_mass = msini / np.sin(np.arccos(random_cosis))
-
-    #     mass_idx = np.where(
-    #         (random_mass < self.msini_bins[1:])
-    #         & (random_mass > self.msini_bins[:-1])
-    #     )[0]
-
-    #     ###
-
-# def _integral(x, B):
-#             # copied this from wolfram. god bless symbolic integrators.
-#             # indefinite integral of 1 - arcsin(B/y)dy evaluated at y=x
-#             xpr = x / B
-#             integrated_value = (
-#                 x
-#                 - (
-#                     xpr * np.arcsin(1 / xpr)
-#                     + np.log(np.abs(xpr + np.tan(np.arccos(1 / xpr))))
-#                 )
-#                 * B
-#             )
-#             return integrated_value
-
-#         # TODO: try caching this for speed boost, but be careful of state
-#         def _integral_under_msini(msini):
-#             # this is the integral over the area that looks like a rectangle with bite out of top right corner
-#             integral = 0
-#             for mass_idx in np.arange(self.n_mass_bins):
-#                 theta_n = histogram_heights[
-#                     ecc_idx, sma_idx, mass_idx
-#                 ]  # fitted paramter
-
-#                 inc_intercept_up = np.arcsin(msini / self.mass_bins[mass_idx + 1])
-#                 inc_intercept_down = np.arcsin(msini / self.mass_bins[mass_idx])
-
-#                 if np.isnan(inc_intercept_up) and np.isnan(
-#                     inc_intercept_down
-#                 ):  # integral is over square area
-#                     integral += (
-#                         2
-#                         * theta_n
-#                         * (self.mass_bins[mass_idx + 1] - self.mass_bins[mass_idx])
-#                     )
-
-#                 elif not np.isnan(inc_intercept_up) and not np.isnan(
-#                     inc_intercept_down
-#                 ):  # integral is bounded by msini = const curve
-#                     integral += (
-#                         2
-#                         * theta_n
-#                         * (
-#                             _integral(self.mass_bins[mass_idx + 1], msini)
-#                             - _integral(self.mass_bins[mass_idx], msini)
-#                         )
-#                     )
-
-#                 else:
-#                     assert not np.isnan(inc_intercept_up) and np.isnan(
-#                         inc_intercept_down
-#                     )
-#                     # account for case of round+square
-#                     integral += (
-#                         2
-#                         * theta_n
-#                         * (
-#                             _integral(self.mass_bins[mass_idx + 1], msini)
-#                             - _integral(msini, msini)
-#                         )
-#                     )
-#                     integral += 2 * theta_n * (msini - self.mass_bins[mass_idx])
-
-#             import pdb
-
-#             pdb.set_trace()
-#             return integral
-
-#         norm_constant = 0

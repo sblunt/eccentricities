@@ -9,6 +9,10 @@ import pandas as pd
 from astropy import units as u, constants as cst
 import glob
 
+"""
+Visualize the outputs of a hierarchical histogram run
+"""
+
 
 # read in MCMC samples
 n_msini_bins = 3
@@ -18,11 +22,10 @@ n_e_bins = 5
 n_burn = 500  # number of burn-in steps I ran for the actual MCMC
 n_total = 500
 nwalkers = 100
-fullmarg = "fullmarg_"  # ["fullmarg_", ""]
-bdprior = "bdprior_"  # ["bdprior", ""]
-
+fullmarg = 'fullmarg_' # 'fullmarg_' or '' depending on model run
+ 
 ndim = n_mass_bins * n_sma_bins * n_e_bins
-savedir = f"plots/{fullmarg}{bdprior}{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
+savedir = f"plots/{n_msini_bins}msini{n_sma_bins}sma{n_e_bins}e"
 
 nstars_cps = 719  # total number of stars in the sample
 
@@ -325,12 +328,12 @@ plt.savefig(
     dpi=250,
 )
 
-# """
-# corner plot
-# """
+"""
+corner plot
+"""
 
-# # corner.corner(chains_flattened)
-# # plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
+corner.corner(chains_flattened)
+plt.savefig(f"{savedir}/corner_burn{n_burn}_total{n_total}.png", dpi=250)
 
 """
 trend plot

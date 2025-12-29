@@ -2,8 +2,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 """
-Fulton+ 23 reproduction plot
+Fulton+ 23 reproduction plot (Figure 5 in my paper.)
 Compare with https://content.cld.iop.org/journals/0067-0049/255/1/14/revision1/apjsabfcc1f5_hr.jpg
+
+To make this plot, you'll need to run a hierarchical histogram model, using the same bin choices
+as Fulton+ 23, with and without the inclination marginalization. Follow the steps outlined in the README
+to make the completeness model and importance reweight the posterior samples. Then, run `run_histogram.py` 
+and `run_histogram_full_marginalization.py`. This file plots the outputs from both of those runs, to compare
+against BJ's independent results.
 """
 n_mass_bins = 3
 n_e_bins = 1
@@ -13,22 +19,22 @@ nwalkers = 100
 ndim = n_mass_bins * n_sma_bins * n_e_bins
 
 chains_msini = np.loadtxt(
-    "/home/sblunt/eccentricities/plots/2msini6sma1e_msini/epop_samples_burn500_total500.csv",
+    "../plots/2msini6sma1e_msini/epop_samples_burn500_total500.csv",
     delimiter=",",
 )
 chains_msini = chains_msini.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins - 1))
 
 chains_mass = np.loadtxt(
-    "/home/sblunt/eccentricities/plots/fullmarg_bdprior_3msini6sma1e/epop_samples_burn500_total500.csv",
+    "../plots/fullmarg_bdprior_3msini6sma1e/epop_samples_burn500_total500.csv",
     delimiter=",",
 )
 chains_mass = chains_mass.reshape((-1, n_e_bins, n_sma_bins, n_mass_bins))
 
 
-ecc_bins = np.load("completeness_model/fultoncomp{}ecc_bins.npy".format(n_e_bins))
-sma_bins = np.load("completeness_model/fultoncomp{}sma_bins.npy".format(n_sma_bins))
+ecc_bins = np.load("../completeness_model/fultoncomp{}ecc_bins.npy".format(n_e_bins))
+sma_bins = np.load("../completeness_model/fultoncomp{}sma_bins.npy".format(n_sma_bins))
 msini_bins = np.load(
-    "completeness_model/fultoncomp{}msini_bins.npy".format(n_mass_bins)
+    "../completeness_model/fultoncomp{}msini_bins.npy".format(n_mass_bins)
 )
 
 print(msini_bins)
@@ -100,14 +106,6 @@ for chain_idx, chains in enumerate([chains_msini, chains_mass]):
                     int(msini_bins[2]), mass_label, int(msini_bins[3])
                 )
 
-            # for k in range(n2plot):
-            #     ax[chain_idx].plot(
-            #         [sma_bins[j], sma_bins[j + 1]],
-            #         np.ones(2) * d_occurrence_dloga[idx2plot[k], j],
-            #         color=colors[i],
-            #         alpha=0.1,
-            #     )
-
             quantiles = np.quantile(d_occurrence_dloga[:, j], [0.16, 0.5, 0.84])
             ax[chain_idx].errorbar(
                 [np.exp(0.5 * (np.log(sma_bins[j]) + np.log(sma_bins[j + 1])))],
@@ -123,7 +121,6 @@ for chain_idx, chains in enumerate([chains_msini, chains_mass]):
     ax[chain_idx].set_title(title)
     ax[chain_idx].set_xscale("log")
     ax[chain_idx].set_xlabel("$a$ [au]")
-    # ax[chain_idx].set_ylim(0, 14)
     ax[chain_idx].legend()
 
 for a in ax:
@@ -131,4 +128,4 @@ for a in ax:
 
 ax[0].set_ylabel("N$_{{\\mathrm{{pl}}}}$ / 100 stars / $\\Delta$log$_e$(a)")
 
-plt.savefig(f"plots/fulton_comp.png", dpi=250)
+plt.savefig(f"../plots/fulton_comp.png", dpi=250)

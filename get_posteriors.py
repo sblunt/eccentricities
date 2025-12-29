@@ -11,9 +11,11 @@ import scipy
 Grabs ecc, msini, and sma posteriors for the planet sample, uses importance
 resampling to obtain samples the posteriors assuming they were sampled under
 unifom priors on log(sma) and log(msini), and writes them as csvs to be injested 
-into the HBM model.
+into the HBM model. This code takes a while because it has to load all the MCMC chains.
 
 NOTE: I'm also including detected stellar binaries here
+
+NOTE: needs radvel v1.3.8 to load posteriors
 """
 
 legacy_planets = pd.read_csv(
@@ -154,7 +156,7 @@ for pl in legacy_planets.iterrows():
         starname = pl[1].hostname
         if starname not in [
             "141399"  # ,"111031"
-        ]:  # (can use this logic to rerun transfers for only a subset of objects)
+        ]:  # (can use this logic to rerun resampling for only a subset of objects)
             continue
         if (
             starname != "213472"
@@ -163,15 +165,11 @@ for pl in legacy_planets.iterrows():
             plnum = int(pl[1].pl_index)
 
             chains = pd.read_csv(
-                "/home/sblunt/eccentricities/lee_posteriors/run_final/{}/chains.csv.tar.bz2".format(
-                    starname
-                ),
+                "ee_posteriors/run_final/{}/chains.csv.tar.bz2".format(starname),
                 compression="bz2",
             )
             with open(
-                "/home/sblunt/eccentricities/lee_posteriors/run_final/{}/post_final.pkl".format(
-                    starname
-                ),
+                "lee_posteriors/run_final/{}/post_final.pkl".format(starname),
                 "rb",
             ) as f:
                 posterior = pickle.load(f)
@@ -238,7 +236,7 @@ for pl in legacy_planets.iterrows():
                 Mstar,
                 sma_posterior,
                 msini_posterior,
-                savename="/home/sblunt/eccentricities/lee_posteriors/resampled/prior_approx_{}_pl{}.png".format(
+                savename="lee_posteriors/resampled/prior_approx_{}_pl{}.png".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
             )
@@ -327,7 +325,7 @@ for pl in legacy_planets.iterrows():
 
             plt.tight_layout()
             plt.savefig(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/priors_{}_pl{}.png".format(
+                "lee_posteriors/resampled/priors_{}_pl{}.png".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 dpi=250,
@@ -335,7 +333,7 @@ for pl in legacy_planets.iterrows():
             plt.close()
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/msini_{}_pl{}.csv".format(
+                "lee_posteriors/resampled/msini_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 msini_resampled_posterior,
@@ -343,14 +341,14 @@ for pl in legacy_planets.iterrows():
             )
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/sma_{}_pl{}.csv".format(
+                "lee_posteriors/resampled/sma_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 sma_resampled_posterior,
                 delimiter=",",
             )
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/resampled/ecc_{}_pl{}.csv".format(
+                "lee_posteriors/resampled/ecc_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 ecc_resampled_posterior,
@@ -358,7 +356,7 @@ for pl in legacy_planets.iterrows():
             )
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/original/msini_{}_pl{}.csv".format(
+                "lee_posteriors/original/msini_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 msini_posterior,
@@ -366,14 +364,14 @@ for pl in legacy_planets.iterrows():
             )
 
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/original/sma_{}_pl{}.csv".format(
+                "lee_posteriors/original/sma_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 sma_posterior,
                 delimiter=",",
             )
             np.savetxt(
-                "/home/sblunt/eccentricities/lee_posteriors/original/ecc_{}_pl{}.csv".format(
+                "lee_posteriors/original/ecc_{}_pl{}.csv".format(
                     pl[1].hostname, int(pl[1].pl_index)
                 ),
                 ecc_posterior,

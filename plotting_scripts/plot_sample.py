@@ -2,6 +2,7 @@ import glob
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import os
 
 """
 Chill plot to explore the sample
@@ -73,4 +74,7 @@ for i, a in enumerate(ax):
     )
 ax[0].text(1e-1, 0.8, f"total detections: {total_detections}")
 plt.tight_layout()
-plt.savefig("plots/sanity_checks/sample_split.png", dpi=250)
+
+if not os.path.exists("../plots/sanity_checks"):
+    os.mkdir("../plots/sanity_checks")
+plt.savefig("../plots/sanity_checks/sample_split.png", dpi=250)

@@ -14,7 +14,7 @@ import os
 
 n_ecc_bins = 5
 n_sma_bins = 1
-n_msini_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+]
+n_msini_bins = 3  # [<1.17 Mj and > 1.17Mj is binning used in Frelikh+ 19]
 path_to_clsi = f"{os.path.expanduser('~')}/Documents/Github"  # where I stored the clsi Github repo with inj-rec tests
 
 # NOTE: BIN BOUNDARIES DEFINED HERE

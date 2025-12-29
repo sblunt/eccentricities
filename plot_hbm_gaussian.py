@@ -4,6 +4,10 @@ import corner
 from astropy import units as u, constants as cst
 from scipy.stats import norm
 
+"""
+Visualize the outputs of a hierarchical histogram run
+"""
+
 # read in MCMC samples
 n_mass_bins = 3
 n_sma_bins = 1
