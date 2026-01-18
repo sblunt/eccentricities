@@ -110,6 +110,9 @@ class HierHistogram(object):
         if (
             self.bd_prior
         ):  # set a prior that keeps bd occurrence rate below bd_max_occurrence
+            # (note: this didn't end up being necessary-- the bd desert occurrence rate
+            # appeared to be ~2%, and constrained by the data. This may be contaminated
+            # by stellar binaries though.)
             for i in np.arange(self.n_e_bins):
                 for j in np.arange(self.n_sma_bins):
                     bd_occurrence += (
