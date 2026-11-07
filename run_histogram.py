@@ -65,19 +65,20 @@ class HierHistogram(object):
                     self.sma_posteriors[k] < sma_bins[i + 1]
                 )
                 self.completeness_labels[sma_mask, 1, k] = i
+            # one inclination draw per posterior sample, shared by all mass bins
+            cosi_samples = np.random.uniform(
+                -1, 1, size=len(self.msini_posteriors[k])
+            )
+            mass_posterior = self.msini_posteriors[k] / (
+                np.sin(np.arccos(cosi_samples))
+            )
+            self.mass_posteriors.append(mass_posterior)
+
             for i in range(len(msini_bins) - 1):
                 msini_mask = (self.msini_posteriors[k] >= msini_bins[i]) & (
                     self.msini_posteriors[k] < msini_bins[i + 1]
                 )
                 self.completeness_labels[msini_mask, 2, k] = i
-
-                cosi_samples = np.random.uniform(
-                    -1, 1, size=len(self.msini_posteriors[k])
-                )
-                mass_posterior = self.msini_posteriors[k] / (
-                    np.sin(np.arccos(cosi_samples))
-                )
-                self.mass_posteriors.append(mass_posterior)
 
                 mass_mask = (mass_posterior >= msini_bins[i]) & (
                     mass_posterior < msini_bins[i + 1]
